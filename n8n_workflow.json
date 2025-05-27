@@ -1,0 +1,365 @@
+{
+  "name": "RAG Workflow - Google Drive to Pinecone & OpenAI",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "StartNodeIngestion",
+      "name": "Start Ingestion",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        250,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "search",
+        "returnAll": true,
+        "filters": {
+          "parentFolderId": "{{ $env.GOOGLE_DRIVE_FOLDER_ID }}",
+          "mimeTypes": "application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,application/pdf"
+        }
+      },
+      "id": "SearchGoogleDrive",
+      "name": "Search Google Drive Files",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        500,
+        100
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "PLACEHOLDER_GOOGLE_DRIVE_CREDENTIALS_ID",
+          "name": "Google Drive OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "SplitFilesLoop",
+      "name": "Loop Through Files",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [
+        750,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "download",
+        "fileId": "{{ $json.id }}",
+        "binary": true
+      },
+      "id": "DownloadFile",
+      "name": "Download File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1000,
+        100
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "PLACEHOLDER_GOOGLE_DRIVE_CREDENTIALS_ID",
+          "name": "Google Drive OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "binaryPropertyName": "data",
+        "options": {
+          "extractFullText": true
+        }
+      },
+      "id": "ExtractFileContent",
+      "name": "Extract File Content",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "javascript": "const text = items[0].json.text; \nconst sourceDocument = items[0].json.fileName || 'unknown_source';\nconst chunkSize = parseInt({{ $env.CHUNK_SIZE || 1000 }});\nconst chunkOverlap = parseInt({{ $env.CHUNK_OVERLAP || 100 }});\nconst chunks = [];\n\nif (text) {\n  for (let i = 0; i < text.length; i += (chunkSize - chunkOverlap)) {\n    const chunkEnd = Math.min(i + chunkSize, text.length);\n    chunks.push(text.substring(i, chunkEnd));\n  }\n}\n\nreturn chunks.map(chunk => ({ \n  json: { \n    textChunk: chunk, \n    sourceDocument: sourceDocument \n  } \n}));"
+      },
+      "id": "ChunkText",
+      "name": "Chunk Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        100
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "OpenAIEmbedChunks",
+      "name": "Embed Document Chunks",
+      "type": "n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1750,
+        100
+      ],
+      "typeParameters": {
+        "modelName": "{{ $env.OPENAI_EMBEDDING_MODEL || 'text-embedding-ada-002' }}",
+        "text": "{{ $json.textChunk }}"
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "PLACEHOLDER_OPENAI_CREDENTIALS_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "PineconeUpsert",
+      "name": "Upsert to Pinecone",
+      "type": "n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        100
+      ],
+      "typeParameters": {
+        "operationMode": "insertDocuments",
+        "embeddings": "{{ $json.embedding }}",
+        "textKey": "textChunk",
+        "pineconeIndex": "{{ $env.PINECONE_INDEX_NAME }}",
+        "options": {
+          "pineconeNamespace": "{{ $env.PINECONE_NAMESPACE }}"
+        }
+      },
+      "credentials": {
+        "pineconeApi": {
+          "id": "PLACEHOLDER_PINECONE_CREDENTIALS_ID",
+          "name": "Pinecone API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "userQuery": "What is n8n?"
+      },
+      "id": "StartRAGQuery",
+      "name": "Start RAG Query",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "typeVersion": 1,
+      "position": [
+        250,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "AIAgentRAG",
+      "name": "RAG AI Agent",
+      "type": "n8n-nodes-langchain.agent",
+      "typeVersion": 1,
+      "position": [
+        500,
+        400
+      ],
+      "typeParameters": {
+        "input": "{{ $json.userQuery }}",
+        "model": {
+          "nodeType": "n8n-nodes-langchain.lmChatOpenAi",
+          "credentials": {
+            "openAiApi": {
+              "id": "PLACEHOLDER_OPENAI_CREDENTIALS_ID",
+              "name": "OpenAI API"
+            }
+          },
+          "typeParameters": {
+            "modelName": "{{ $env.OPENAI_CHAT_MODEL || 'gpt-3.5-turbo' }}",
+            "temperature": 0.7
+          }
+        },
+        "tools": [
+          {
+            "nodeType": "n8n-nodes-langchain.vectorStorePinecone",
+            "typeParameters": {
+              "operationMode": "retrieveDocumentsAsTool",
+              "name": "document_retriever_tool",
+              "description": "Use this tool to retrieve relevant document excerpts to answer user questions.",
+              "pineconeIndex": "{{ $env.PINECONE_INDEX_NAME }}",
+              "options": {
+                "pineconeNamespace": "{{ $env.PINECONE_NAMESPACE }}"
+              },
+              "embeddings": {
+                "nodeType": "n8n-nodes-langchain.embeddingsOpenAi",
+                "typeParameters": {
+                  "modelName": "{{ $env.OPENAI_EMBEDDING_MODEL || 'text-embedding-ada-002' }}"
+                },
+                "credentials": {
+                  "openAiApi": {
+                    "id": "PLACEHOLDER_OPENAI_CREDENTIALS_ID",
+                    "name": "OpenAI API"
+                  }
+                }
+              }
+            },
+            "credentials": {
+              "pineconeApi": {
+                "id": "PLACEHOLDER_PINECONE_CREDENTIALS_ID",
+                "name": "Pinecone API"
+              }
+            }
+          }
+        ],
+        "memory": {
+          "nodeType": "n8n-nodes-langchain.memoryBufferWindow",
+          "typeParameters": {
+            "memoryKey": "chat_history",
+            "k": 3
+          }
+        },
+        "options": {
+          "maxIterations": 5,
+          "returnIntermediateSteps": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "text": "User Query: {{ $json.userQuery }}\\n\\nAgent Answer: {{ $('AIAgentRAG').item.json.output }}"
+      },
+      "id": "AnswerOutput",
+      "name": "Display Answer",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        750,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "StartNodeIngestion": {
+      "main": [
+        [
+          {
+            "node": "SearchGoogleDrive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SearchGoogleDrive": {
+      "main": [
+        [
+          {
+            "node": "SplitFilesLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SplitFilesLoop": {
+      "main": [
+        [
+          {
+            "node": "DownloadFile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DownloadFile": {
+      "main": [
+        [
+          {
+            "node": "ExtractFileContent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ExtractFileContent": {
+      "main": [
+        [
+          {
+            "node": "ChunkText",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ChunkText": {
+      "main": [
+        [
+          {
+            "node": "OpenAIEmbedChunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAIEmbedChunks": {
+      "main": [
+        [
+          {
+            "node": "PineconeUpsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "StartRAGQuery": {
+      "main": [
+        [
+          {
+            "node": "AIAgentRAG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AIAgentRAG": {
+      "main": [
+        [
+          {
+            "node": "AnswerOutput",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "id": "PLACEHOLDER_WORKFLOW_ID",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "RAG"
+    },
+    {
+      "name": "AI"
+    }
+  ]
+}
