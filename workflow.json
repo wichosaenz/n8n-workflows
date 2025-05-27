@@ -1,0 +1,453 @@
+{
+  "name": "Google Drive to Pinecone RAG Ingestion",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        400,
+        100
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "operation": "listMessagesOrFiles",
+        "resource": "file",
+        "folderId": "ID_DE_TU_CARPETA_GOOGLE_DRIVE",
+        "filters": "mimeType = 'application/pdf' OR mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' OR mimeType = 'application/msword'",
+        "fieldsToGet": "id,name,mimeType,createdTime,modifiedTime,webViewLink,md5Checksum",
+        "limit": 100,
+        "returnAll": false
+      },
+      "name": "GoogleDrive_ListFiles",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 1,
+      "position": [
+        600,
+        100
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "__MY_GOOGLE_DRIVE_CREDENTIAL__",
+          "name": "__MY_GOOGLE_DRIVE_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "SplitInBatches_Files",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        800,
+        100
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT file_id FROM processed_files WHERE file_id = '{{ $json.id }}';",
+        "options": {}
+      },
+      "name": "Postgres_CheckDuplicate",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        100
+      ],
+      "credentials": {
+        "postgresSql": {
+          "id": "__MY_POSTGRES_CREDENTIAL__",
+          "name": "__MY_POSTGRES_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "{{ $items('Postgres_CheckDuplicate')[0].json.length === 0 }}"
+            }
+          ]
+        }
+      },
+      "name": "IF_IsNewFile",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        100
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": "{{ $json.id }}",
+        "binaryPropertyName": "data"
+      },
+      "name": "GoogleDrive_DownloadFile",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        200
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "__MY_GOOGLE_DRIVE_CREDENTIAL__",
+          "name": "__MY_GOOGLE_DRIVE_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "URL_API_EXTRACCION_TEXTO",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "{{ $binary.data.fileName || $json.name }}",
+              "type": "file",
+              "typeOptions": {
+                "binaryData": true
+              }
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "responseFormat": "json",
+            "fullResponse": false
+          },
+          "continueOnFail": true
+        }
+      },
+      "name": "HTTPRequest_ExtractText",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        200
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// User Configuration:\nconst chunkSize = 1500; // Target size of each text chunk\nconst chunkOverlap = 150; // Number of characters to overlap between chunks\n// Path to extracted text from the HTTPRequest_ExtractText node.\n// Adjust this based on the actual response structure of your text extraction API.\n// Examples: $json.text, $json.extracted_content, $json.data.text_field\nconst extractedText = $json.text; // Assuming output of HTTPRequest_ExtractText is like {\"text\": \"...\"}\n\n// --- Helper function to determine document type ---\nfunction getDocumentType(mimeType) {\n  if (mimeType === 'application/pdf') {\n    return 'PDF';\n  } else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || mimeType === 'application/msword') {\n    return 'Word';\n  }\n  return 'Unknown';\n}\n\n// --- Main Chunking Logic ---\nconst results = [];\nif (extractedText && typeof extractedText === 'string') {\n  let i = 0;\n  let chunkCounter = 0;\n  while (i < extractedText.length) {\n    const chunkEnd = Math.min(i + chunkSize, extractedText.length);\n    const textChunk = extractedText.substring(i, chunkEnd);\n\n    // Retrieve original file metadata from the input item.\n    // This assumes the Code node is receiving the item that originated from GoogleDrive_ListFiles,\n    // potentially merged with data from GoogleDrive_DownloadFile and HTTPRequest_ExtractText.\n    // Ensure your workflow passes these fields correctly.\n    // The $item(0) or similar might be needed if data is split. For simplicity, direct access is assumed.\n    // Check n8n documentation if data from earlier nodes isn't directly in $json.\n    const fileData = $item(0).$json; // Assumes data from the node that started this execution branch (SplitInBatches)\n\n    const metadata = {\n      file_id: fileData.id, // From GoogleDrive_ListFiles\n      file_name: fileData.name, // From GoogleDrive_ListFiles\n      document_type: getDocumentType(fileData.mimeType), // From GoogleDrive_ListFiles\n      creation_date: fileData.createdTime, // From GoogleDrive_ListFiles\n      modification_date: fileData.modifiedTime, // From GoogleDrive_ListFiles\n      source_url: fileData.webViewLink, // From GoogleDrive_ListFiles\n      chunk_sequential_id: `chunk_${chunkCounter}`,\n      chunk_text: textChunk, // Storing the chunk text itself in metadata for Pinecone\n      // page_number_start: null, // Placeholder if your extraction API provides page numbers\n      // page_number_end: null,   // Placeholder\n      // keywords: \"\", // Optional: Could be generated by another LLM call\n      // summary_chunk: \"\" // Optional: Could be generated by another LLM call\n    };\n\n    results.push({\n      text_chunk: textChunk,\n      metadata_enriched: metadata\n    });\n\n    i += chunkSize - chunkOverlap;\n    if (i >= extractedText.length && chunkEnd === extractedText.length) {\n        // Handles the case where the loop condition might prevent the last chunk if it's smaller\n        // and overlap causes 'i' to exceed length. This ensures last part is always captured.\n        break; \n    }\n    chunkCounter++;\n  }\n} else {\n  // Handle cases where text might be missing or not a string\n  // You might want to log an error or return an empty array\n  console.warn(`No text found or invalid format for item: ${$json.file_id || 'Unknown ID'}`);\n  // return []; // Option to return empty if no text\n}\n\n// The Code node should return an array of items.\n// Each item will be processed by subsequent nodes.\nreturn results;"
+      },
+      "name": "Code_ChunkText",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        200
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "embedding",
+        "model": "text-embedding-3-small",
+        "text": "{{ $json.text_chunk }}",
+        "options": {}
+      },
+      "name": "OpenAI_Embeddings",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        200
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "__MY_OPENAI_CREDENTIAL__",
+          "name": "__MY_OPENAI_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "index": "NOMBRE_DE_TU_INDICE_PINECONE",
+        "namespace": "NAMESPACE_OPCIONAL",
+        "vectors": "{{ [{ \"id\": $json.metadata_enriched.file_id + \"_\" + $json.metadata_enriched.chunk_sequential_id, \"values\": $json.embedding, \"metadata\": $json.metadata_enriched }] }}",
+        "options": {}
+      },
+      "name": "Pinecone_Upsert",
+      "type": "n8n-nodes-base.pinecone",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        200
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "__MY_PINECONE_CREDENTIAL__",
+          "name": "__MY_PINECONE_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processed_files (file_id, file_name, md5_checksum, processed_at)\nVALUES (\n  '{{ $json.metadata_enriched.file_id }}',\n  '{{ $json.metadata_enriched.file_name }}',\n  '{{ $item(0).$json.md5Checksum }}',\n  NOW()\n)\nON CONFLICT (file_id) DO NOTHING;",
+        "options": {
+          "continueOnFail": true
+        }
+      },
+      "name": "Postgres_LogProcessed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        2400,
+        200
+      ],
+      "credentials": {
+        "postgresSql": {
+          "id": "__MY_POSTGRES_CREDENTIAL__",
+          "name": "__MY_POSTGRES_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "text": "**Workflow: Ingesta de Documentos (Google Drive a Pinecone con OpenAI)**\n\nObjetivo Principal:\nAutomatizar la ingesta de documentos (PDF y Word) desde Google Drive, generar embeddings con OpenAI (text-embedding-3-small), y almacenar en Pinecone con metadatos enriquecidos.\n\nPrerrequisitos Generales:\n1. Configurar todas las credenciales (Google Drive, OpenAI, Pinecone, Postgres, y la API de extracción de texto).\n2. Revisar y ajustar los parámetros específicos de cada nodo (ej. ID de carpeta de Google Drive, URL de API de extracción, configuraciones de chunking, nombres de índices de Pinecone, detalles de conexión a Postgres).\n3. Asegurarse que la tabla 'processed_files' exista en la base de datos Postgres con la estructura requerida (columna 'file_id' TEXT PRIMARY KEY, 'file_name' TEXT, 'md5_checksum' TEXT, 'processed_at' TIMESTAMP WITH TIME ZONE).\n\nFlujo General:\n1. Disparador Manual.\n2. Listar archivos de Google Drive.\n3. Control de Duplicados (vía Postgres).\n4. Descargar archivo nuevo.\n5. Extraer texto (vía API externa).\n6. Dividir texto en Chunks y enriquecer metadatos.\n7. Generar Embeddings (OpenAI).\n8. Almacenar en Pinecone.\n9. Registrar archivo procesado (Postgres).\n\nManejo de Errores:\nEl workflow incluye manejo básico de errores. Los nodos críticos tienen 'Continue on Fail' activado para no detener todo el flujo si un ítem falla."
+      },
+      "name": "StickyNote_GeneralConfig",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        -200
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "text": "**Google Drive - List Files**\n\nObjetivo: Listar archivos PDF y Word de una carpeta específica en Google Drive.\n\nConfiguración del Usuario:\n1. ID de Carpeta: Reemplaza 'ID_DE_TU_CARPETA_GOOGLE_DRIVE' con el ID real de tu carpeta de Google Drive.\n2. Credenciales: Asegúrate de que las credenciales '__MY_GOOGLE_DRIVE_CREDENTIAL__' estén configuradas correctamente.\n\nDetalles:\n- Filtra por tipos de archivo: PDF, DOCX, DOC.\n- Obtiene metadatos: id, name, mimeType, createdTime, modifiedTime, webViewLink (para source_url), md5Checksum.\n- Límite inicial de 100 archivos (ajustable)."
+      },
+      "name": "StickyNote_Gdrive",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        600,
+        -50
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "text": "**Control de Duplicados**\n\nObjetivo: Evitar procesar archivos que ya han sido ingeridos.\n\nLógica:\n1.  `SplitInBatches_Files`: Procesa cada archivo individualmente.\n2.  `Postgres_CheckDuplicate`: Consulta la tabla 'processed_files' buscando el 'file_id' del archivo actual.\n    *   Credenciales: '__MY_POSTGRES_CREDENTIAL__'\n    *   Tabla requerida: 'processed_files' con 'file_id' TEXT PRIMARY KEY.\n3.  `IF_IsNewFile`:\n    *   Si la consulta NO devuelve resultados (length === 0), el archivo es nuevo y el flujo continúa por la rama 'true'.\n    *   Si el archivo ya existe, el flujo para ese ítem termina aquí (o podría ir a una rama 'false' si se quisiera hacer algo específico)."
+      },
+      "name": "StickyNote_DuplicateCheck",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        -50
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "text": "**Descarga y Extracción de Texto**\n\nObjetivo: Descargar el archivo nuevo y extraer su contenido textual usando una API externa.\n\nLógica:\n1.  `GoogleDrive_DownloadFile`: Descarga el archivo desde Google Drive.\n    *   Credenciales: '__MY_GOOGLE_DRIVE_CREDENTIAL__'\n    *   El archivo se almacena en una propiedad binaria (por defecto 'data').\n2.  `HTTPRequest_ExtractText`: Envía el archivo a una API de extracción de texto.\n    *   Configuración del Usuario:\n        *   URL: Reemplaza 'URL_API_EXTRACCION_TEXTO' con el endpoint de tu servicio.\n        *   Autenticación: Configura la autenticación requerida por tu API (ej. Bearer Token en Headers, API Key, etc.).\n    *   Envío: Multipart/form-data, esperando el archivo binario.\n    *   Respuesta Esperada: Un JSON con el texto extraído en un campo (ej. `{'text': 'contenido...'}`). Ajusta el acceso al texto en el nodo de Chunking si tu API devuelve otro formato.\n    *   Manejo de Errores: 'Continue on Fail' está activado. Los errores se pueden dirigir al nodo 'ErrorTrigger_Extraction'."
+      },
+      "name": "StickyNote_Extraction",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        50
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "text": "**Generación de Metadatos y Chunking (División de Texto)**\n\nObjetivo: Dividir el texto extraído en chunks (segmentos) y enriquecer cada chunk con metadatos.\n\nLógica (Nodo \"Code_ChunkText\"):\n-   **Entrada Esperada**: El nodo espera que el texto extraído esté disponible (por defecto intenta leer de `$json.text` del ítem anterior).\n    *   **IMPORTANTE**: Ajusta la variable `extractedText` dentro del código si tu API de extracción devuelve el texto en una ruta diferente (ej. `$json.data.text_content`).\n-   **Configuración en el Código**:\n    *   `chunkSize`: Tamaño deseado de cada chunk (ej. 1500 caracteres).\n    *   `chunkOverlap`: Solapamiento entre chunks (ej. 150 caracteres).\n-   **Metadatos por Chunk**:\n    *   `file_id`, `file_name`, `document_type`, `creation_date`, `modification_date`, `source_url`: Obtenidos de los metadatos del archivo original de Google Drive.\n    *   `chunk_sequential_id`: Identificador secuencial del chunk dentro del documento (ej. chunk_0, chunk_1).\n    *   `chunk_text`: El texto original del chunk también se guarda en los metadatos.\n    *   Opcional: Se pueden añadir campos como `page_number_start`/`end` si tu API los provee y mapeas correctamente, o resúmenes/palabras clave generados por IA.\n-   **Salida**: El nodo genera un array de objetos. Cada objeto contiene:\n    *   `text_chunk`: El texto del segmento.\n    *   `metadata_enriched`: El objeto con todos los metadatos del chunk.\n    Cada uno de estos objetos será procesado individualmente por los nodos siguientes (OpenAI, Pinecone)."
+      },
+      "name": "StickyNote_Chunking",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        50
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "text": "**Generación de Embeddings (OpenAI)**\n\nObjetivo: Generar embeddings vectoriales para cada chunk de texto utilizando OpenAI.\n\nLógica (Nodo \"OpenAI_Embeddings\"):\n-   **Entrada Esperada**: Cada objeto de la lista generada por el nodo \"Code_ChunkText\", que contiene 'text_chunk' y 'metadata_enriched'.\n-   **Operación**: Utiliza la operación 'embedding' de OpenAI.\n-   **Modelo**: Configurado para 'text-embedding-3-small'.\n-   **Texto a Embeder**: Toma el valor de 'text_chunk' del ítem de entrada.\n-   **Credenciales**: '__MY_OPENAI_CREDENTIAL__'.\n-   **Salida**: El nodo añade el vector de embedding al ítem. El ítem ahora contendrá 'text_chunk', 'metadata_enriched', y el embedding."
+      },
+      "name": "StickyNote_Embedding",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        50
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "text": "**Almacenamiento en Pinecone**\n\nObjetivo: Almacenar los embeddings generados y sus metadatos enriquecidos en una base de datos vectorial Pinecone.\n\nLógica (Nodo \"Pinecone_Upsert\"):\n-   **Entrada Esperada**: Cada ítem procesado por OpenAI, que contiene 'text_chunk', 'metadata_enriched', y 'embedding'.\n-   **Operación**: 'upsert'.\n-   **Configuración del Usuario**:\n    *   Credenciales: '__MY_PINECONE_CREDENTIAL__'.\n    *   Índice (`index`): Reemplaza 'NOMBRE_DE_TU_INDICE_PINECONE' con el nombre de tu índice en Pinecone. Este índice debe existir previamente y tener la dimensionalidad correcta para los embeddings 'text-embedding-3-small' (1536).\n    *   Namespace (`namespace`): Opcional. Define un namespace si lo utilizas en tu índice. Puedes dejarlo vacío.\n-   **Datos Enviados a Pinecone por Vector**:\n    *   `id`: Un ID único para el vector, construido como `file_id + \"_\" + chunk_sequential_id`.\n    *   `values`: El vector de embedding obtenido de OpenAI (se asume que está en `$json.embedding`).\n    *   `metadata`: El objeto completo `metadata_enriched` (incluyendo `file_id`, `file_name`, `chunk_text`, `document_type`, fechas, etc.). Esto es crucial para búsquedas semánticas y filtrado."
+      },
+      "name": "StickyNote_Pinecone",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        50
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "text": "**Registro de Archivos Procesados (Postgres)**\n\nObjetivo: Registrar cada archivo procesado en una tabla de Postgres para evitar reprocesamiento.\n\nLógica (Nodo \"Postgres_LogProcessed\"):\n-   **Entrada Esperada**: Ítems que han pasado por Pinecone (un ítem por chunk).\n-   **Operación**: 'executeQuery'.\n-   **Credenciales**: '__MY_POSTGRES_CREDENTIAL__'.\n-   **SQL Query**:\n    ```sql\n    INSERT INTO processed_files (file_id, file_name, md5_checksum, processed_at)\n    VALUES (\n      '{{ $json.metadata_enriched.file_id }}',       -- De los metadatos del chunk\n      '{{ $json.metadata_enriched.file_name }}',     -- De los metadatos del chunk\n      '{{ $item(0).$json.md5Checksum }}', -- Del item original de GDrive List (puede necesitar ajuste)\n      NOW()                                       -- Fecha y hora actual\n    )\n    ON CONFLICT (file_id) DO NOTHING;\n    ```\n-   **Estrategia de Registro**:\n    *   La query intenta insertar el `file_id`, `file_name`, `md5_checksum` (si está disponible desde el nodo GDrive List Files original), y la marca de tiempo.\n    *   `ON CONFLICT (file_id) DO NOTHING`: Si el `file_id` ya existe, no hace nada. Esto asegura que el archivo se registre solo una vez, típicamente después de que su primer chunk es procesado y llega a este nodo.\n    *   `md5Checksum`: La expresión `'{{ $item(0).$json.md5Checksum }}'` intenta obtener el checksum del archivo original listado por Google Drive. Si este dato no se propaga correctamente o no está disponible, considera añadirlo al objeto `metadata_enriched` en el nodo de Chunking, o haz la columna `md5_checksum` en tu tabla Postgres NULABLE.\n-   **Manejo de Errores**: 'Continue on Fail' está activado."
+      },
+      "name": "StickyNote_Logging",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2400,
+        50
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {},
+      "name": "ErrorTrigger_Extraction",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        50
+      ],
+      "credentials": {}
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "GoogleDrive_ListFiles",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "GoogleDrive_ListFiles": {
+      "main": [
+        [
+          {
+            "node": "SplitInBatches_Files",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "SplitInBatches_Files": {
+      "main": [
+        [
+          {
+            "node": "Postgres_CheckDuplicate",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "Postgres_CheckDuplicate": {
+      "main": [
+        [
+          {
+            "node": "IF_IsNewFile",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "IF_IsNewFile": {
+      "main": [
+        [
+          {
+            "node": "GoogleDrive_DownloadFile",
+            "input": "main",
+            "output": "true"
+          }
+        ]
+      ]
+    },
+    "GoogleDrive_DownloadFile": {
+      "main": [
+        [
+          {
+            "node": "HTTPRequest_ExtractText",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "HTTPRequest_ExtractText": {
+      "main": [
+        [
+          {
+            "node": "Code_ChunkText",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "Code_ChunkText": {
+      "main": [
+        [
+          {
+            "node": "OpenAI_Embeddings",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "OpenAI_Embeddings": {
+      "main": [
+        [
+          {
+            "node": "Pinecone_Upsert",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "Pinecone_Upsert": {
+      "main": [
+        [
+          {
+            "node": "Postgres_LogProcessed",
+            "input": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2023-10-26T10:00:00.000Z",
+  "updatedAt": "2023-10-26T10:00:00.000Z",
+  "id": "workflow-id-placeholder",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "instance-id-placeholder"
+  },
+  "settings": {}
+}
