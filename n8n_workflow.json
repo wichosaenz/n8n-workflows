@@ -91,7 +91,17 @@
     },
     {
       "parameters": {
-        "javascript": "const text = items[0].json.text; \nconst sourceDocument = items[0].json.fileName || 'unknown_source';\nconst chunkSize = parseInt({{ $env.CHUNK_SIZE || 1000 }});\nconst chunkOverlap = parseInt({{ $env.CHUNK_OVERLAP || 100 }});\nconst chunks = [];\n\nif (text) {\n  for (let i = 0; i < text.length; i += (chunkSize - chunkOverlap)) {\n    const chunkEnd = Math.min(i + chunkSize, text.length);\n    chunks.push(text.substring(i, chunkEnd));\n  }\n}\n\nreturn chunks.map(chunk => ({ \n  json: { \n    textChunk: chunk, \n    sourceDocument: sourceDocument \n  } \n}));"
+        "jsCode": "const items = [];\nfor (const item of $input.all()) {\n  const json = item.json;\n  const textContent = json.text || '';\n  const googleDriveFileId = json.id; \n  const fileName = json.name; \n  const mimeType = json.mimeType; \n\n  item.json = {\n    text: textContent,\n    metadata: {\n      googleDriveFileId: googleDriveFileId,\n      fileName: fileName,\n      fileType: mimeType,\n      title: fileName,\n      excerpt: textContent.substring(0, 200)\n    }\n  };\n  items.push(item);\n}\nreturn items;"
+      },
+      "id": "extract-file-metadata-actual-uuid",
+      "name": "Extract File Metadata",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1375, 100]
+    },
+    {
+      "parameters": {
+        "javascript": "const itemJson = items[0].json;\nconst text = itemJson.text; \nconst metadata = itemJson.metadata; \nconst chunkSize = parseInt({{ $env.CHUNK_SIZE || 1000 }});\nconst chunkOverlap = parseInt({{ $env.CHUNK_OVERLAP || 100 }});\nconst chunks = [];\n\nif (text) {\n  for (let i = 0; i < text.length; i += (chunkSize - chunkOverlap)) {\n    const chunkEnd = Math.min(i + chunkSize, text.length);\n    chunks.push(text.substring(i, chunkEnd));\n  }\n}\n\nreturn chunks.map(chunk => ({\n  json: {\n    textChunk: chunk,\n    chunkMetadata: metadata \n  }\n}));"
       },
       "id": "ChunkText",
       "name": "Chunk Text",
@@ -148,6 +158,22 @@
           "name": "Pinecone API"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "update-track-list-noop-actual-uuid",
+      "name": "Update Track_List Placeholder",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2125, 100]
+    },
+    {
+      "parameters": {},
+      "id": "end-of-ingestion-actual-uuid",
+      "name": "End Of Ingestion Process",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2250, 100]
     },
     {
       "parameters": {
@@ -296,7 +322,40 @@
       "main": [
         [
           {
+            "node": "extract-file-metadata-actual-uuid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract-file-metadata-actual-uuid": {
+      "main": [
+        [
+          {
             "node": "ChunkText",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PineconeUpsert": {
+      "main": [
+        [
+          {
+            "node": "update-track-list-noop-actual-uuid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update-track-list-noop-actual-uuid": {
+      "main": [
+        [
+          {
+            "node": "end-of-ingestion-actual-uuid",
             "type": "main",
             "index": 0
           }
