@@ -1,830 +1,662 @@
 {
-  "name": "RAG Chatbot para un Plan de Negocios usando Google Drive and Anthropic - Ver 5",
+  "name": "Agente Generador de Contenido Reutilizable",
   "nodes": [
     {
       "parameters": {
-        "mode": "insert",
-        "pineconeIndex": {
-          "__rl": true,
-          "value": "__PINECONE_INDEX_NAME__",
-          "mode": "list",
-          "cachedResultName": "storage2"
-        },
-        "options": {}
+        "triggerTimes": {
+          "mode": "custom",
+          "rules": [
+            {
+              "rule": {
+                "weekday": "{{ $env.DIA_PROGRAMADO_TRIGGER }}",
+                "hour": "{{ parseInt($env.HORA_PROGRAMADA_TRIGGER.split(':')[0]) }}",
+                "minute": "{{ parseInt($env.HORA_PROGRAMADA_TRIGGER.split(':')[1]) }}"
+              }
+            }
+          ]
+        }
       },
-      "id": "7435d8e4-3894-46e9-8ec7-c17b07673f28",
-      "name": "Pinecone Vector Store",
-      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
-      "position": [
-        1140,
-        240
-      ],
+      "id": "47f66d11-b0f0-4a03-af38-34e0603ef8b9",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "alwaysOutputData": true,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "read",
+        "documentId": "{{ $env.GSHEET_PLANNER_ID }}",
+        "sheetName": "TareasAgente",
+        "options": {
+          "filter": {
+            "conditions": [
+              {
+                "columnName": "Agente_ID",
+                "operation": "equal",
+                "value": "{{ $env.AGENTE_ID }}"
+              },
+              {
+                "columnName": "Dia_Programado_Trigger",
+                "operation": "equal",
+                "value": "{{ $now.weekdayLong }}"
+              },
+              {
+                "columnName": "Semana_ID_Tarea",
+                "operation": "equal",
+                "value": "{{ $now.toFormat('kkkk-WW') }}"
+              }
+            ]
+          },
+          "range": "",
+          "oneRow": true
+        }
+      },
+      "id": "f2b4a9cf-00ef-4f76-8f51-079b43060e50",
+      "name": "Obtener Tarea y Perfil del Agente",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        900,
+        300
+      ],
       "credentials": {
-        "pineconeApi": {
-          "id": "__CREDENTIAL_PINECONE__",
-          "name": "PineconeApi account"
+        "googleSheetsOAuth2Api": {
+          "id": "{{ $env.CREDENTIAL_GOOGLE_SHEETS }}",
+          "name": "Google Sheets Credential"
         }
       }
     },
     {
       "parameters": {
-        "options": {
-          "splitPages": false
+        "conditions": {
+          "operator": "and",
+          "conditions": [
+            {
+              "condition": {
+                "type": "boolean",
+                "value1": "{{ $json.Agente_ID !== undefined && $json.Agente_ID !== null && $json.Agente_ID !== '' }}"
+              }
+            }
+          ]
         }
       },
-      "id": "d592ea8c-a224-40f4-9ad3-abe10fb2f1ac",
-      "name": "Default Data Loader",
-      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+      "name": "Check if Task Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
       "position": [
-        1280,
-        500
-      ],
-      "typeVersion": 1
+        1100,
+        300
+      ]
     },
     {
       "parameters": {
-        "chunkSize": 800,
-        "chunkOverlap": 10,
+        "values": {
+          "string": [
+            {
+              "name": "query_rag_core",
+              "value": "={{ $('Obtener Tarea y Perfil del Agente').item.json.Tema_Principal_Tarea }} {{ $('Obtener Tarea y Perfil del Agente').item.json.Angulo_Enfoque_Tarea }}"
+            }
+          ]
+        },
         "options": {}
       },
-      "id": "18a4f3b5-644e-4f2a-9fec-21555b1847c5",
-      "name": "Recursive Character Text Splitter",
-      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "id": "bc4d3f5e-6a7b-8c9d-0e1f-2a3b4c5d6e7f",
+      "name": "Preparar Consulta para RAG Core",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
       "position": [
         1300,
-        680
-      ],
-      "typeVersion": 1
+        200
+      ]
     },
     {
       "parameters": {
-        "agent": "conversationalAgent",
-        "options": {
-          "systemMessage": "Eres un asistente experto en planes de negocios, integrado a un sistema RAG que trabaja con documentos divididos por capítulos. Siempre que recibas una pregunta, debes seguir los siguientes pasos de razonamiento:\n\n1. Determina si la pregunta se relaciona con un capítulo específico (por tema o título).\n2. Prioriza buscar la información en los documentos divididos por capítulos.\n3. Si se trata de una aclaración conceptual, busca primero en el archivo JSON de preguntas frecuentes asociado al capítulo.\n4. Solo si no se encuentra respuesta exacta, genera una respuesta basada en el contenido textual más relevante del capítulo correspondiente.\n5. Si no existe información suficiente, acláralo al usuario de forma transparente.\n\n⚠️ No agregues ideas externas ni generalizaciones que no estén explícitamente en los capítulos cargados. No inventes datos.\n\n🎯 Tu objetivo es guiar al usuario paso a paso en la construcción de un plan de negocios en 30 días, siempre con precisión y referencias fieles al material fuente.\n\n✅ Usa un tono claro, directo y profesional. Ofrece ejemplos cuando sea necesario y organiza los pasos en listas numeradas o bullets si aplican.\n"
-        }
+        "model": "text-embedding-3-small",
+        "text": "{{ $json.query_rag_core }}"
       },
-      "id": "91a82206-19c1-49b4-a1c8-e014fa3704e1",
-      "name": "AI Agent",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "position": [
-        660,
-        1200
-      ],
-      "typeVersion": 1.7
-    },
-    {
-      "parameters": {
-        "name": "company_documents_tool",
-        "description": "Retrieve information from any company documents"
-      },
-      "id": "ff5de7f6-5501-468d-9f00-091e93f42556",
-      "name": "Vector Store Tool",
-      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
-      "position": [
-        1020,
-        1380
-      ],
-      "typeVersion": 1
-    },
-    {
-      "parameters": {
-        "pineconeIndex": {
-          "__rl": true,
-          "value": "__PINECONE_INDEX_NAME__",
-          "mode": "list",
-          "cachedResultName": "storage2"
-        },
-        "operation": "retrieve",
-        "options": {
-          "includeMetadata": true
-        }
-      },
-      "id": "80205842-84cf-456f-88fa-32c12d9590dc",
-      "name": "Pinecone Vector Store (Retrieval)",
-      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
-      "position": [
-        880,
-        1600
-      ],
+      "id": "d1e2f3a4-b5c6-7d8e-9f0a-1b2c3d4e5f6a",
+      "name": "Generar Embedding para RAG Core",
+      "type": "n8n-nodes-ai.openAiEmbeddings",
       "typeVersion": 1,
+      "position": [
+        1500,
+        200
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "{{ $env.CREDENTIAL_OPENAI }}",
+          "name": "OpenAI Credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "query",
+        "index": "{{ $env.PINECONE_INDEX_CORE }}",
+        "vector": "{{ $json.embedding }}",
+        "topK": 5,
+        "includeValues": true,
+        "includeMetadata": true
+      },
+      "id": "e9f0a1b2-c3d4-e5f6-a7b8-c9d0e1f2a3b4",
+      "name": "Buscar en RAG Core",
+      "type": "n8n-nodes-vector.pinecone",
+      "typeVersion": 1,
+      "position": [
+        1700,
+        200
+      ],
       "credentials": {
         "pineconeApi": {
-          "id": "__CREDENTIAL_PINECONE__",
-          "name": "PineconeApi account"
+          "id": "{{ $env.CREDENTIAL_PINECONE }}",
+          "name": "Pinecone Credential"
         }
       }
     },
     {
       "parameters": {
-        "content": "## Chat with company documents"
-      },
-      "id": "f7227c75-b105-45ec-9d6e-54ea5d9a3ee2",
-      "name": "Sticky Note2",
-      "type": "n8n-nodes-base.stickyNote",
-      "position": [
-        660,
-        1020
-      ],
-      "typeVersion": 1
-    },
-    {
-      "parameters": {},
-      "id": "31b2f108-e914-4381-8a62-774f01165c55",
-      "name": "Window Buffer Memory",
-      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
-      "position": [
-        740,
-        1500
-      ],
-      "typeVersion": 1.3
-    },
-    {
-      "parameters": {
-        "public": true,
-        "mode": "webhook",
-        "options": {
-          "allowedOrigins": "https://www.wichosaenz.com",
-          "responseMode": "lastNode"
-        }
-      },
-      "id": "af15a1cd-269e-4856-899c-aa1eddb2e0b1",
-      "name": "When chat message received",
-      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
-      "position": [
-        320,
-        1200
-      ],
-      "webhookId": "eef2bad6-43e5-4979-983e-48e540e964a9",
-      "typeVersion": 1.1
-    },
-    {
-      "parameters": {
-        "content": "## Add docuemnts to vector store when updating or creating new documents in Google Drive",
-        "width": 320
-      },
-      "id": "3c808c21-7586-4310-b19a-2af65f22383c",
-      "name": "Sticky Note",
-      "type": "n8n-nodes-base.stickyNote",
-      "position": [
-        2120,
-        -120
-      ],
-      "typeVersion": 1
-    },
-    {
-      "parameters": {
-        "content": "## Set up steps\n\n1. Google Cloud Project and Vertex AI API:\n* Create a Google Cloud project.\n* Enable the Vertex AI API for your project.\n2. Google AI API Key:\n* Obtain a Google AI API key from Google AI Studio.\n3. Pinecone Account:\n* Create a free account on the Pinecone website.\nObtain your API key from your Pinecone dashboard.\n* Create an index named company-files in your Pinecone project.\n4. Google Drive:\n* Create a dedicated folder in your Google Drive where company documents will be stored.\n5. Credentials in n8n: Configure credentials in your n8n environment for:\n* Google Drive OAuth2\n* Google Gemini(PaLM) Api (using your Google AI API key)\n* Pinecone API (using your Pinecone API key)\n5. Import the Workflow:\n* Import this workflow into your n8n instance.\n6. Configure the Workflow:\n* Update both Google Drive Trigger nodes to watch the specific folder you created in your Google Drive.\n* Configure the Pinecone Vector Store nodes to use your company-files index.",
-        "height": 620,
-        "width": 420
-      },
-      "id": "b0f2fc0d-5d73-4a92-bfde-ac99e6569d77",
-      "name": "Sticky Note1",
-      "type": "n8n-nodes-base.stickyNote",
-      "position": [
-        -300,
-        680
-      ],
-      "typeVersion": 1
-    },
-    {
-      "parameters": {
-        "model": "text-embedding-3-large",
-        "options": {
-          "dimensions": 3072
-        }
-      },
-      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
-      "typeVersion": 1.2,
-      "position": [
-        1080,
-        600
-      ],
-      "id": "c5e6bb65-dc07-43ef-a71e-614babbdfbd0",
-      "name": "Embeddings OpenAI",
-      "credentials": {
-        "openAiApi": {
-          "id": "__CREDENTIAL_OPENAI__",
-          "name": "OpenAi account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "model": "text-embedding-3-large",
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
-      "typeVersion": 1.2,
-      "position": [
-        960,
-        1780
-      ],
-      "id": "3db3b365-b021-405c-a791-324207ada7ca",
-      "name": "Embeddings OpenAI1",
-      "credentials": {
-        "openAiApi": {
-          "id": "__CREDENTIAL_OPENAI__",
-          "name": "OpenAi account"
-        }
-      }
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
-      "position": [
-        -520,
-        240
-      ],
-      "id": "3f5ef612-c57a-4325-9185-7ee67b0c4e1e",
-      "name": "When clicking ‘Test workflow’"
-    },
-    {
-      "parameters": {
-        "options": {}
-      },
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [
-        300,
-        220
-      ],
-      "id": "9527eaf2-4a04-476a-9862-173d060af0c4",
-      "name": "Loop Over Items"
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.noOp",
-      "name": "Replace Me",
-      "typeVersion": 1,
-      "position": [
-        1480,
-        240
-      ],
-      "id": "b7b23330-9975-46e7-892a-b1d1d3f0389d"
-    },
-    {
-      "parameters": {
-        "resource": "fileFolder",
-        "returnAll": true,
-        "filter": {
-          "folderId": {
-            "__rl": true,
-            "value": "1H1A21wVgZModHsuqsZt4zo-gCKtYvmeN",
-            "mode": "list",
-            "cachedResultName": "30dias",
-            "cachedResultUrl": "https://drive.google.com/drive/folders/1H1A21wVgZModHsuqsZt4zo-gCKtYvmeN"
-          }
-        },
-        "options": {
-          "fields": [
-            "*"
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
-      "position": [
-        -200,
-        120
-      ],
-      "id": "3d3b85e1-3591-4d45-9cf1-ba237dfbf98e",
-      "name": "Files_List",
-      "credentials": {
-        "googleDriveOAuth2Api": {
-          "id": "JVcMrryb83h085PT",
-          "name": "Google Drive account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "documentId": {
-          "__rl": true,
-          "value": "1iNOCGpcfnES9IWMJzbTfIO0NHkEwInWdZ6KM8Wuwcmg",
-          "mode": "list",
-          "cachedResultName": "versiones",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1iNOCGpcfnES9IWMJzbTfIO0NHkEwInWdZ6KM8Wuwcmg/edit?usp=drivesdk"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "gid=0",
-          "mode": "list",
-          "cachedResultName": "files_list",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1iNOCGpcfnES9IWMJzbTfIO0NHkEwInWdZ6KM8Wuwcmg/edit#gid=0"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
-      "position": [
-        -200,
-        340
-      ],
-      "id": "91a78f14-f21e-4b57-8ace-5e504754a658",
-      "name": "Track_List",
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "K0f8FAyo4nfMpmBI",
-          "name": "Google Sheets account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "advanced": true,
-        "mergeByFields": {
-          "values": [
+        "values": {
+          "string": [
             {
-              "field1": "id",
-              "field2": "File ID"
-            }
-          ]
-        },
-        "joinMode": "keepNonMatches",
-        "outputDataFrom": "input1",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.1,
-      "position": [
-        60,
-        220
-      ],
-      "id": "df994c80-4400-4f2a-bdad-60c2184f8e81",
-      "name": "Merge",
-      "alwaysOutputData": true
-    },
-    {
-      "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "1iNOCGpcfnES9IWMJzbTfIO0NHkEwInWdZ6KM8Wuwcmg",
-          "mode": "list",
-          "cachedResultName": "versiones",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1iNOCGpcfnES9IWMJzbTfIO0NHkEwInWdZ6KM8Wuwcmg/edit?usp=drivesdk"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "gid=0",
-          "mode": "list",
-          "cachedResultName": "files_list",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1iNOCGpcfnES9IWMJzbTfIO0NHkEwInWdZ6KM8Wuwcmg/edit#gid=0"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "File ID": "={{ $json.id }}",
-            "File Name": "={{ $json.name }}",
-            "version": "={{ $json.version }}",
-            "Last Processed": "={{ $json['Last Processed'] }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "File ID",
-              "displayName": "File ID",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "File Name",
-              "displayName": "File Name",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "version",
-              "displayName": "version",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "Last Processed",
-              "displayName": "Last Processed",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
-      "position": [
-        1120,
-        -100
-      ],
-      "id": "c74d712e-0e99-4cb8-a8c2-25db73a51cba",
-      "name": "Add_TrackList",
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "K0f8FAyo4nfMpmBI",
-          "name": "Google Sheets account"
-        }
-      },
-      "disabled": true
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "e55e48d5-aeb6-4758-9f54-a8c76b220ef7",
-              "name": "id",
-              "value": "={{ $json.id }}",
-              "type": "string"
-            },
-            {
-              "id": "ebdc3cfa-aa02-4212-bec3-921890377550",
-              "name": "name",
-              "value": "={{ $json.name }}",
-              "type": "string"
-            },
-            {
-              "id": "8b5f1ce1-da19-407d-ba78-766129196569",
-              "name": "version",
-              "value": "={{ $json.version }}",
-              "type": "string"
-            },
-            {
-              "id": "572ed5a6-09d1-4fd9-b7a0-30df3a79ca7d",
-              "name": "Last Processed",
-              "value": "={{ $json.modifiedTime }}",
-              "type": "string"
-            },
-            {
-              "id": "17106ac3-3c50-4d73-a463-6ffd9df3bb1a",
-              "name": "mimeType",
-              "value": "={{ $json.mimeType }}",
-              "type": "string"
+              "name": "query_rag_hermanos",
+              "value": "={{ $('Preparar Consulta para RAG Core').item.json.query_rag_core }}"
             }
           ]
         },
         "options": {}
       },
+      "id": "f8a7b6c5-d4e3-f2a1-0987-654321fedcba",
+      "name": "Preparar Consulta para RAG Sitios Hermanos",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "typeVersion": 1,
       "position": [
-        540,
-        240
-      ],
-      "id": "e72524a0-a682-4be4-aab8-c46cb14d4ded",
-      "name": "Edit Fields"
+        1500,
+        400
+      ]
     },
     {
       "parameters": {
-        "operation": "download",
-        "fileId": {
-          "__rl": true,
-          "value": "={{ $json.id }}",
-          "mode": "id"
-        },
-        "options": {
-          "fileName": "={{ $json.name }}"
-        }
+        "model": "text-embedding-3-small",
+        "text": "{{ $json.query_rag_hermanos }}"
       },
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
+      "id": "a0b1c2d3-e4f5-a6b7-c8d9-e0f1a2b3c4d5",
+      "name": "Generar Embedding para RAG Sitios Hermanos",
+      "type": "n8n-nodes-ai.openAiEmbeddings",
+      "typeVersion": 1,
       "position": [
-        760,
-        240
+        1700,
+        400
       ],
-      "id": "7cf158fd-a78d-4afc-be68-cdd665e8a291",
-      "name": "Descargar_File",
-      "alwaysOutputData": true,
       "credentials": {
-        "googleDriveOAuth2Api": {
-          "id": "JVcMrryb83h085PT",
-          "name": "Google Drive account"
+        "openAiApi": {
+          "id": "{{ $env.CREDENTIAL_OPENAI }}",
+          "name": "OpenAI Credential"
         }
       }
     },
     {
       "parameters": {
-        "operation": "pdf",
-        "options": {}
+        "operation": "query",
+        "index": "{{ $env.PINECONE_INDEX_SITIOS_HERMANOS }}",
+        "vector": "{{ $json.embedding }}",
+        "topK": 7,
+        "includeValues": true,
+        "includeMetadata": true
       },
-      "type": "n8n-nodes-base.extractFromFile",
+      "id": "b9c8d7e6-f5a4-b3c2-d1e0-f9a8b7c6d5e4",
+      "name": "Buscar en RAG Sitios Hermanos",
+      "type": "n8n-nodes-vector.pinecone",
       "typeVersion": 1,
       "position": [
-        960,
-        240
+        1900,
+        400
       ],
-      "id": "fd546dcd-f15c-49af-8803-858b57a6f3e9",
-      "name": "Extract from File"
+      "credentials": {
+        "pineconeApi": {
+          "id": "{{ $env.CREDENTIAL_PINECONE }}",
+          "name": "Pinecone Credential"
+        }
+      }
     },
     {
       "parameters": {
-        "model": {
-          "__rl": true,
-          "value": "claude-3-5-haiku-20241022",
-          "mode": "list",
-          "cachedResultName": "Claude 3.5 Haiku"
+        "values": {
+          "string": [
+            {
+              "name": "claude_prompt",
+              "value": "**Rol Asignado:** {{ $('Obtener Tarea y Perfil del Agente').item.json.Perfil_Agente_Rol_Descripcion }}\n**Estilo de Escritura Solicitado:** {{ $('Obtener Tarea y Perfil del Agente').item.json.Perfil_Agente_Estilo_Escritura }}\n**Tema a Desarrollar:** {{ $('Obtener Tarea y Perfil del Agente').item.json.Tema_Principal_Tarea }}\n**Ángulo Específico:** {{ $('Obtener Tarea y Perfil del Agente').item.json.Angulo_Enfoque_Tarea }}\n**Palabras Clave Sugeridas (considerar para el estilo y SEO):** {{ $('Obtener Tarea y Perfil del Agente').item.json.Perfil_Agente_Palabras_Clave_Sugeridas_Estilo }}\n\n**Información de Contexto de RAG Core (Fuente Principal de Verdad):**\n{{ JSON.stringify($('Buscar en RAG Core').items.map(item => item.json)) }}\n\n**Información de Contexto de Artículos Existentes en Sitios Hermanos (para ideas, validación y posibles interlinks):**\n{{ JSON.stringify($('Buscar en RAG Sitios Hermanos').items.map(item => item.json)) }}\n\n**Instrucciones:**\nActuando con el ROL y ESTILO definidos arriba, y utilizando la información de contexto proporcionada, genera un artículo de blog completo y original. El artículo debe incluir:\n1. Un título principal atractivo y optimizado.\n2. Una introducción que enganche al lector.\n3. Un cuerpo de artículo bien estructurado con encabezados H2 y H3 (mínimo 3-4 secciones H2).\n4. **Interlinks Naturales:** Cuando sea contextualmente relevante y aporte valor al lector, integra de 1 a 3 enlaces internos (interlinks) a artículos mencionados en el 'Contexto de RAG Sitios Hermanos'. Utiliza el título del artículo hermano como texto ancla o una variación natural. Asegúrate de que estos enlaces se sientan orgánicos y no forzados. Varía los artículos enlazados si se generan múltiples piezas sobre temas similares.\n5. Una conclusión clara y concisa.\n6. Un Título SEO (máximo 60-70 caracteres).\n7. Una Meta Descripción SEO (máximo 155-160 caracteres).\n8. Una lista de 3-5 Palabras Clave/Tags principales para el artículo.\n\nAsegúrate de que el contenido sea de alta calidad, bien redactado, y directamente relevante para el tema y ángulo asignados. No inventes información que no esté respaldada por el contexto proporcionado.\nResponde EXCLUSIVAMENTE en formato JSON válido con las siguientes claves: \"titulo_generado\", \"cuerpo_articulo_markdown\", \"meta_descripcion_generada\", \"titulo_seo_generado\", \"tags_sugeridos_array\"."
+            }
+          ]
         },
-        "options": {}
+        "options": {
+          "keepOnlySet": true
+        }
       },
-      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
-      "typeVersion": 1.3,
+      "id": "c7d6e5f4-a3b2-c1d0-e9f8-a7b6c5d4e3f2",
+      "name": "Preparar Prompt Detallado para Claude",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1.1,
       "position": [
-        480,
-        1520
+        2100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-opus-20240229",
+        "prompt": "{{ $json.claude_prompt }}",
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "d5e4f3c2-b1a0-d9e8-f7c6-b5a4d3e2f1c0",
+      "name": "Generar Artículo con Claude",
+      "type": "n8n-nodes-anthropic.chat",
+      "typeVersion": 1,
+      "position": [
+        2300,
+        300
       ],
-      "id": "1e7393b6-1d3f-4db7-8237-b439c2bd085e",
-      "name": "Anthropic Chat Model",
       "credentials": {
         "anthropicApi": {
-          "id": "__CREDENTIAL_ANTHROPIC__",
-          "name": "Anthropic account"
+          "id": "{{ $env.CREDENTIAL_ANTHROPIC }}",
+          "name": "Anthropic Credential"
         }
       }
     },
     {
       "parameters": {
-        "content": "AI Agent: Orchestrates the RAG process. It receives the user query, utilizes the connected Vector Store Tool to fetch relevant documents, and then generates a response using the main LLM, considering the retrieved context and conversation memory.",
-        "height": 150,
-        "width": 300
+        "values": {
+          "string": [
+            {
+              "name": "titulo_final_post",
+              "value": "={{ $('Generar Artículo con Claude').item.json.titulo_generado }}"
+            },
+            {
+              "name": "cuerpo_articulo_markdown",
+              "value": "={{ $('Generar Artículo con Claude').item.json.cuerpo_articulo_markdown }}"
+            },
+            {
+              "name": "meta_descripcion_final",
+              "value": "={{ $('Generar Artículo con Claude').item.json.meta_descripcion_generada }}"
+            },
+            {
+              "name": "titulo_seo_final",
+              "value": "={{ $('Generar Artículo con Claude').item.json.titulo_seo_generado }}"
+            }
+          ],
+          "json": [
+            {
+              "name": "tags_sugeridos_array",
+              "value": "={{ $('Generar Artículo con Claude').item.json.tags_sugeridos_array }}"
+            }
+          ]
+        },
+        "options": {
+          "keepOnlySet": true
+        }
       },
-      "id": "01a776d1-dd73-4283-9559-53eed3666636",
-      "name": "AI Agent Orchestrator Explanation",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
+      "id": "e3f2a1b0-c9d8-e7f6-a5b4-c3d2e1f0a9b8",
+      "name": "Extraer Campos de Claude",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1.1,
       "position": [
-        660,
-        960
+        2500,
+        300
       ]
     },
     {
       "parameters": {
-        "content": "Optimal RAG: Vector Store Tool directly feeds retrieved documents (and metadata) to the AI Agent. No intermediary LLM is used for pre-processing retrieved documents, ensuring the AI Agent has access to the raw, unaltered context from the Vector Store.",
-        "height": 150,
-        "width": 300
+        "sourceValue": "={{ $('Extraer Campos de Claude').item.json.cuerpo_articulo_markdown }}",
+        "dataPropertyName": "cuerpo_html_final_post",
+        "options": {}
       },
-      "id": "3fc2856c-5029-4ff6-81a2-c924e963c11c",
-      "name": "Optimal RAG Path Explanation",
-      "type": "n8n-nodes-base.stickyNote",
+      "id": "f1a0b9c8-d7e6-f5a4-b3c2-d1e0f9a8b7c6",
+      "name": "Convertir Markdown a HTML",
+      "type": "n8n-nodes-base.markdownToHtml",
       "typeVersion": 1,
       "position": [
-        1020,
-        1600
+        2700,
+        300
       ]
     },
     {
       "parameters": {
-        "content": "Pinecone Vector Store (Retrieval): Configured in 'retrieve' mode. It fetches relevant document chunks based on the query embedding. Metadata associated with these chunks is also retrieved and passed to the AI Agent to enrich the context.",
-        "height": 150,
-        "width": 300
+        "url": "{{ $env.RANKMATH_API_ENDPOINT }}",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "body": "=JSON.stringify({\n        title: $('Extraer Campos de Claude').item.json.titulo_seo_final,\n        description: $('Extraer Campos de Claude').item.json.meta_descripcion_final,\n        keywords: $('Extraer Campos de Claude').item.json.tags_sugeridos_array.join(','),\n      })",
+        "options": {
+          "splitIntoItems": false
+        }
       },
-      "id": "cb36a5b0-15bb-418f-98fe-aaadd502cffc",
-      "name": "Pinecone Retrieval Config Explanation",
-      "type": "n8n-nodes-base.stickyNote",
+      "id": "a9b8c7d6-e5f4-a3b2-c1d0-e9f8a7b6c5d4",
+      "name": "Interacción con Plugin SEO (Opcional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2900,
+        300
+      ],
+      "notes": "Este nodo es opcional y solo se ejecutará si _RANKMATH_API_ENDPOINT_ está configurado. Considerar un 'If' antes de este nodo para hacerlo condicional."
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "url_imagen_destacada",
+              "value": "={{ $env.PLACEHOLDER_IMAGE_URL || 'https://example.com/default-featured-image.jpg' }}"
+            }
+          ]
+        },
+        "options": {
+          "keepOnlySet": false
+        }
+      },
+      "id": "b7c6d5e4-f3a2-b1a0-d9e8-f7c6b5a4d3e2",
+      "name": "Gestión de Imagen Destacada",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1.1,
+      "position": [
+        3100,
+        300
+      ],
+      "notes": "Este nodo es un placeholder para la URL de la imagen destacada. Reemplazar con una búsqueda en Pexels, una API de generación de imágenes, o un valor dinámico."
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Obtener Tarea y Perfil del Agente').item.json.Sitio_WordPress_URL_Destino.replace(/\\/$/, '') + '/wp-json/wp/v2/posts' }}",
+        "method": "POST",
+        "authentication": "basicAuth",
+        "sendBody": true,
+        "contentType": "application/json",
+        "body": "=JSON.stringify({\n        title: $('Extraer Campos de Claude').item.json.titulo_seo_final,\n        content: $('Convertir Markdown a HTML').item.json.cuerpo_html_final_post,\n        status: \"publish\",\n        excerpt: $('Extraer Campos de Claude').item.json.meta_descripcion_final,\n        tags: $('Extraer Campos de Claude').item.json.tags_sugeridos_array, // WP API expects tag IDs. Sending names might require a plugin on WP side or prior ID lookup.\n        meta: {\n            fifu_image_url: $('Gestión de Imagen Destacada').item.json.url_imagen_destacada\n        }\n      })",
+        "options": {
+          "splitIntoItems": false,
+          "response": {
+            "fullResponse": false,
+            "responseFormat": "json"
+          }
+        }
+      },
+      "id": "c5d4e3f2-a1b0-c9d8-e7f6-a5b4c3d2e1f0",
+      "name": "Publicar Artículo en WordPress",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3300,
+        300
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "{{ $env.CREDENTIAL_WP_API }}",
+          "name": "WordPress API Credential"
+        }
+      },
+      "notes": "Categories and Tags: Standard WP API expects arrays of IDs. Sending names (like for tags_sugeridos_array) might work if a plugin on the WordPress side processes them, or this part needs adjustment to map names to IDs first. Categories are omitted for now."
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "append",
+        "documentId": "{{ $env.GSHEET_LOG_PUBLICACIONES_ID }}",
+        "sheetName": "={{ \"LogPublicaciones_\" + $('Obtener Tarea y Perfil del Agente').item.json.Agente_ID }}",
+        "columns": {
+          "values": [
+            {
+              "columnName": "ID_Articulo_WP",
+              "value": "={{ $('Publicar Artículo en WordPress').item.json.id }}"
+            },
+            {
+              "columnName": "Titulo_Publicado",
+              "value": "={{ $('Publicar Artículo en WordPress').item.json.title.rendered }}"
+            },
+            {
+              "columnName": "URL_Publicada",
+              "value": "={{ $('Publicar Artículo en WordPress').item.json.link }}"
+            },
+            {
+              "columnName": "Tema_Cubierto",
+              "value": "={{ $('Obtener Tarea y Perfil del Agente').item.json.Tema_Principal_Tarea }}"
+            },
+            {
+              "columnName": "Angulo_Cubierto",
+              "value": "={{ $('Obtener Tarea y Perfil del Agente').item.json.Angulo_Enfoque_Tarea }}"
+            },
+            {
+              "columnName": "Fecha_Hora_Publicacion",
+              "value": "={{ $now.toISO() }}"
+            },
+            {
+              "columnName": "Palabras_Clave_Finales",
+              "value": "={{ $('Extraer Campos de Claude').item.json.tags_sugeridos_array.join(', ') }}"
+            },
+            {
+              "columnName": "Estado_Publicacion_WP",
+              "value": "Publicado"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d3e2f1a0-b9c8-d7e6-f5a4-b3c2d1e0f9a8",
+      "name": "Registrar Artículo Publicado",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        3500,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "{{ $env.CREDENTIAL_GOOGLE_SHEETS }}",
+          "name": "Google Sheets Credential"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "b1a0c9d8-e7f6-f5a4-b3c2-d1e0f9a8b7c6",
+      "name": "Notificación Final (Opcional)",
+      "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        880,
-        1780
-      ]
+        3700,
+        300
+      ],
+      "notes": "Este nodo es un placeholder para una notificación opcional (Email, Slack, etc.). Reemplazar con el nodo de notificación deseado. Mensaje de ejemplo: 'Agente {{ $('Obtener Tarea y Perfil del Agente').item.json.Agente_ID }}: Artículo ''{{ $('Publicar Artículo en WordPress').item.json.title.rendered }}'' publicado.'"
     }
   ],
-  "pinData": {},
   "connections": {
-    "AI Agent": {
-      "main": [
-        []
-      ]
-    },
-    "Vector Store Tool": {
-      "ai_tool": [
-        [
-          {
-            "node": "AI Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Default Data Loader": {
-      "ai_document": [
-        [
-          {
-            "node": "Pinecone Vector Store",
-            "type": "ai_document",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Window Buffer Memory": {
-      "ai_memory": [
-        [
-          {
-            "node": "AI Agent",
-            "type": "ai_memory",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Pinecone Vector Store": {
+    "Schedule Trigger": {
       "main": [
         [
           {
-            "node": "Replace Me",
+            "node": "Obtener Tarea y Perfil del Agente",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "When chat message received": {
+    "Obtener Tarea y Perfil del Agente": {
       "main": [
         [
           {
-            "node": "AI Agent",
+            "node": "Check if Task Found",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Pinecone Vector Store (Retrieval)": {
-      "ai_vectorStore": [
-        [
-          {
-            "node": "Vector Store Tool",
-            "type": "ai_vectorStore",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Recursive Character Text Splitter": {
-      "ai_textSplitter": [
-        [
-          {
-            "node": "Default Data Loader",
-            "type": "ai_textSplitter",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Embeddings OpenAI": {
-      "ai_embedding": [
-        [
-          {
-            "node": "Pinecone Vector Store",
-            "type": "ai_embedding",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Embeddings OpenAI1": {
-      "ai_embedding": [
-        [
-          {
-            "node": "Pinecone Vector Store (Retrieval)",
-            "type": "ai_embedding",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "When clicking ‘Test workflow’": {
+    "Check if Task Found": {
       "main": [
         [
           {
-            "node": "Files_List",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Track_List",
+            "node": "Preparar Consulta para RAG Core",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Loop Over Items": {
+    "Preparar Consulta para RAG Core": {
       "main": [
-        [],
         [
           {
-            "node": "Edit Fields",
+            "node": "Generar Embedding para RAG Core",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Replace Me": {
+    "Generar Embedding para RAG Core": {
       "main": [
         [
           {
-            "node": "Loop Over Items",
+            "node": "Buscar en RAG Core",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Files_List": {
+    "Buscar en RAG Core": {
       "main": [
         [
           {
-            "node": "Merge",
+            "node": "Preparar Consulta para RAG Sitios Hermanos",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Track_List": {
+    "Preparar Consulta para RAG Sitios Hermanos": {
       "main": [
         [
           {
-            "node": "Merge",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Add_TrackList": {
-      "main": [
-        []
-      ]
-    },
-    "Merge": {
-      "main": [
-        [
-          {
-            "node": "Loop Over Items",
+            "node": "Generar Embedding para RAG Sitios Hermanos",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Edit Fields": {
+    "Generar Embedding para RAG Sitios Hermanos": {
       "main": [
         [
           {
-            "node": "Descargar_File",
+            "node": "Buscar en RAG Sitios Hermanos",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Descargar_File": {
+    "Buscar en RAG Sitios Hermanos": {
       "main": [
         [
           {
-            "node": "Extract from File",
+            "node": "Preparar Prompt Detallado para Claude",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract from File": {
+    "Preparar Prompt Detallado para Claude": {
       "main": [
         [
           {
-            "node": "Pinecone Vector Store",
+            "node": "Generar Artículo con Claude",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Anthropic Chat Model": {
-      "ai_languageModel": [
+    "Generar Artículo con Claude": {
+      "main": [
         [
           {
-            "node": "AI Agent",
-            "type": "ai_languageModel",
+            "node": "Extraer Campos de Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Campos de Claude": {
+      "main": [
+        [
+          {
+            "node": "Convertir Markdown a HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convertir Markdown a HTML": {
+      "main": [
+        [
+          {
+            "node": "Interacción con Plugin SEO (Opcional)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interacción con Plugin SEO (Opcional)": {
+      "main": [
+        [
+          {
+            "node": "Gestión de Imagen Destacada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gestión de Imagen Destacada": {
+      "main": [
+        [
+          {
+            "node": "Publicar Artículo en WordPress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publicar Artículo en WordPress": {
+      "main": [
+        [
+          {
+            "node": "Registrar Artículo Publicado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Artículo Publicado": {
+      "main": [
+        [
+          {
+            "node": "Notificación Final (Opcional)",
+            "type": "main",
             "index": 0
           }
         ]
@@ -832,13 +664,24 @@
     }
   },
   "active": false,
-  "settings": {},
-  "versionId": "206285a4-336e-4a4d-91ce-ef1f3f406409",
-  "meta": {
-    "templateId": "2753",
-    "templateCredsSetupCompleted": true,
-    "instanceId": "d0396b0a705c4140d22ce1052a4a87ee9e81204ead4c2282c8eb3bae3dd7a301"
+  "settings": {
+    "executionOrder": "V1"
   },
-  "id": "QFFDuBTLnz5kt2mE",
-  "tags": []
+  "id": "qkNV13qIUn4SpL47",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e11e5231249921a5f2885913560d14f720a8705f098bd7607610d6013474e78c"
+  },
+  "tags": [
+    {
+      "id": "354726cf-96ac-4f5a-87f1-72062f2a5c23",
+      "name": "RAG"
+    },
+    {
+      "id": "f6d7f7f4-1d8c-4e2a-8c4d-5b8a9f0e1d2c",
+      "name": "Content Generation"
+    }
+  ],
+  "staticData": null,
+  "pinData": {}
 }
