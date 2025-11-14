@@ -2,8 +2,8 @@
 /**
  * Plugin Name: WP Subscribers Manager
  * Plugin URI: https://www.wichosaenz.com
- * Description: Plugin para gestionar suscriptores con base de datos MySQL personalizada en Dreamhost. Incluye formulario personalizable con soporte multiidioma, tracking de múltiples sitios web y sistema de debug avanzado.
- * Version: 1.2.1
+ * Description: Plugin para gestionar suscriptores con base de datos MySQL personalizada en Dreamhost. Incluye formulario personalizable con soporte multiidioma, tracking de múltiples sitios web, sistema de debug avanzado, gestión de suscriptores con filtros, y desuscripción con razones.
+ * Version: 1.3.0
  * Author: Wicho Saenz
  * Author URI: https://www.wichosaenz.com
  * Text Domain: wp-subscribers
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('WP_SUBSCRIBERS_VERSION', '1.2.1');
+define('WP_SUBSCRIBERS_VERSION', '1.3.0');
 define('WP_SUBSCRIBERS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WP_SUBSCRIBERS_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -59,6 +59,7 @@ class WP_Subscribers_Manager {
         require_once WP_SUBSCRIBERS_PLUGIN_DIR . 'includes/class-shortcode.php';
         require_once WP_SUBSCRIBERS_PLUGIN_DIR . 'includes/class-widget.php';
         require_once WP_SUBSCRIBERS_PLUGIN_DIR . 'admin/class-admin.php';
+        require_once WP_SUBSCRIBERS_PLUGIN_DIR . 'admin/class-subscribers-list.php';
     }
 
     /**
@@ -116,7 +117,8 @@ class WP_Subscribers_Manager {
      * Encolar assets de admin
      */
     public function enqueue_admin_assets($hook) {
-        if ('toplevel_page_wp-subscribers' !== $hook) {
+        // Cargar en páginas del plugin
+        if ('toplevel_page_wp-subscribers' !== $hook && 'suscriptores_page_wp-subscribers-list' !== $hook) {
             return;
         }
 

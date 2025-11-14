@@ -304,6 +304,189 @@ class WP_Subscribers_Database {
     }
 
     /**
+     * Obtener lista de suscriptores con filtros
+     */
+    public function get_subscribers($filter = 'all', $website_url = null, $limit = 100, $offset = 0) {
+        $connection = $this->get_connection();
+
+        if (!$connection) {
+            return array('success' => false, 'data' => array());
+        }
+
+        $table = $this->settings['db_table'];
+        $where_clauses = array();
+
+        // Filtro por sitio web
+        if ($filter === 'current_site' && $website_url) {
+            $website_url_escaped = $connection->real_escape_string($website_url);
+            $where_clauses[] = "website_url = '{$website_url_escaped}'";
+        }
+
+        // Construir WHERE
+        $where_sql = '';
+        if (!empty($where_clauses)) {
+            $where_sql = 'WHERE ' . implode(' AND ', $where_clauses);
+        }
+
+        // Query con paginación
+        $query = "SELECT id, name, email, subscribed_date, ip_address, status, website_url, source, notes, updated_date
+                  FROM `{$table}`
+                  {$where_sql}
+                  ORDER BY subscribed_date DESC
+                  LIMIT {$limit} OFFSET {$offset}";
+
+        $result = $connection->query($query);
+
+        if (!$result) {
+            return array('success' => false, 'data' => array());
+        }
+
+        $subscribers = array();
+        while ($row = $result->fetch_assoc()) {
+            $subscribers[] = $row;
+        }
+
+        // Contar total
+        $count_query = "SELECT COUNT(*) as total FROM `{$table}` {$where_sql}";
+        $count_result = $connection->query($count_query);
+        $total = $count_result ? $count_result->fetch_assoc()['total'] : 0;
+
+        return array(
+            'success' => true,
+            'data' => $subscribers,
+            'total' => $total
+        );
+    }
+
+    /**
+     * Obtener estadísticas de suscriptores
+     */
+    public function get_statistics($website_url = null) {
+        $connection = $this->get_connection();
+
+        if (!$connection) {
+            return array();
+        }
+
+        $table = $this->settings['db_table'];
+        $where = '';
+
+        if ($website_url) {
+            $website_url_escaped = $connection->real_escape_string($website_url);
+            $where = "WHERE website_url = '{$website_url_escaped}'";
+        }
+
+        $query = "SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+                    SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive,
+                    SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as unsubscribed,
+                    SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as bounced
+                  FROM `{$table}` {$where}";
+
+        $result = $connection->query($query);
+
+        if ($result) {
+            return $result->fetch_assoc();
+        }
+
+        return array();
+    }
+
+    /**
+     * Actualizar estado de un suscriptor
+     */
+    public function update_subscriber_status($email, $new_status, $notes = '') {
+        $connection = $this->get_connection();
+
+        if (!$connection) {
+            return array('success' => false, 'message' => 'Error de conexión');
+        }
+
+        $email = $connection->real_escape_string(sanitize_email($email));
+        $new_status = $connection->real_escape_string(sanitize_text_field($new_status));
+        $notes = $connection->real_escape_string(sanitize_textarea_field($notes));
+
+        $table = $this->settings['db_table'];
+
+        // Preparar actualización de notas
+        $notes_update = '';
+        if (!empty($notes)) {
+            $notes_update = ", notes = CONCAT(COALESCE(notes, ''), '\n[" . current_time('mysql') . "] Status cambiado a {$new_status}: {$notes}')";
+        }
+
+        $query = "UPDATE `{$table}`
+                  SET status = '{$new_status}'{$notes_update}
+                  WHERE email = '{$email}'";
+
+        if ($connection->query($query)) {
+            return array('success' => true, 'message' => 'Estado actualizado correctamente');
+        } else {
+            return array('success' => false, 'message' => 'Error al actualizar: ' . $connection->error);
+        }
+    }
+
+    /**
+     * Desuscribir de TODOS los sitios web (red completa)
+     */
+    public function unsubscribe_from_all_sites($email, $reason = '') {
+        $connection = $this->get_connection();
+
+        if (!$connection) {
+            return array('success' => false, 'message' => 'Error de conexión');
+        }
+
+        $email = $connection->real_escape_string(sanitize_email($email));
+        $reason = $connection->real_escape_string(sanitize_textarea_field($reason));
+        $table = $this->settings['db_table'];
+
+        // Preparar nota de desuscripción
+        $unsubscribe_note = "[" . current_time('mysql') . "] Desuscrito de toda la red";
+        if (!empty($reason)) {
+            $unsubscribe_note .= " - Razón: {$reason}";
+        }
+
+        $query = "UPDATE `{$table}`
+                  SET status = 'unsubscribed',
+                      notes = CONCAT(COALESCE(notes, ''), '\n{$unsubscribe_note}')
+                  WHERE email = '{$email}'";
+
+        if ($connection->query($query)) {
+            $affected = $connection->affected_rows;
+            return array(
+                'success' => true,
+                'message' => 'Desuscrito exitosamente de todos los sitios',
+                'affected_rows' => $affected
+            );
+        } else {
+            return array('success' => false, 'message' => 'Error al desuscribir: ' . $connection->error);
+        }
+    }
+
+    /**
+     * Verificar si un email ya existe y obtener su estado
+     */
+    public function get_subscriber_by_email($email) {
+        $connection = $this->get_connection();
+
+        if (!$connection) {
+            return null;
+        }
+
+        $email = $connection->real_escape_string(sanitize_email($email));
+        $table = $this->settings['db_table'];
+
+        $query = "SELECT * FROM `{$table}` WHERE email = '{$email}' LIMIT 1";
+        $result = $connection->query($query);
+
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+
+        return null;
+    }
+
+    /**
      * Cerrar conexión
      */
     public function close_connection() {

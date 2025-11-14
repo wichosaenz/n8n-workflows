@@ -15,6 +15,8 @@ class WP_Subscribers_Form_Handler {
     public function __construct() {
         add_action('wp_ajax_wp_subscribers_submit', array($this, 'handle_submission'));
         add_action('wp_ajax_nopriv_wp_subscribers_submit', array($this, 'handle_submission'));
+        add_action('wp_ajax_wp_subscribers_unsubscribe_public', array($this, 'handle_unsubscribe'));
+        add_action('wp_ajax_nopriv_wp_subscribers_unsubscribe_public', array($this, 'handle_unsubscribe'));
     }
 
     /**
@@ -47,6 +49,24 @@ class WP_Subscribers_Form_Handler {
 
         // Insertar en la base de datos
         $db = new WP_Subscribers_Database();
+
+        // Primero verificar si el suscriptor ya existe
+        $existing_subscriber = $db->get_subscriber_by_email($email);
+
+        if ($existing_subscriber) {
+            // El suscriptor ya existe - mostrar opción de desuscribirse
+            wp_send_json(array(
+                'success' => false,
+                'data' => array(
+                    'already_subscribed' => true,
+                    'email' => $email,
+                    'name' => $name,
+                    'status' => $existing_subscriber['status'],
+                    'message' => __('Este correo ya está suscrito. Si deseas, puedes desuscribirte de todos los sitios.', 'wp-subscribers')
+                )
+            ));
+        }
+
         $result = $db->insert_subscriber($name, $email);
 
         // Obtener configuración de labels
@@ -77,6 +97,44 @@ class WP_Subscribers_Form_Handler {
             }
 
             wp_send_json_error(array('message' => $message));
+        }
+    }
+
+    /**
+     * Manejar desuscripción desde el frontend
+     */
+    public function handle_unsubscribe() {
+        // Verificar nonce
+        if (!check_ajax_referer('wp_subscribers_nonce', 'nonce', false)) {
+            wp_send_json_error(array(
+                'message' => __('Sesión inválida. Por favor, recarga la página.', 'wp-subscribers')
+            ));
+        }
+
+        // Obtener datos
+        $email = isset($_POST['email']) ? sanitize_email($_POST['email']) : '';
+        $reason = isset($_POST['reason']) ? sanitize_textarea_field($_POST['reason']) : '';
+
+        // Validar email
+        if (empty($email) || !is_email($email)) {
+            wp_send_json_error(array(
+                'message' => __('Por favor, proporciona un correo electrónico válido.', 'wp-subscribers')
+            ));
+        }
+
+        // Desuscribir de todos los sitios
+        $db = new WP_Subscribers_Database();
+        $result = $db->unsubscribe_from_all_sites($email, $reason);
+
+        if ($result['success']) {
+            wp_send_json_success(array(
+                'message' => __('Has sido desuscrito exitosamente de todos los sitios. ¡Esperamos verte de nuevo pronto!', 'wp-subscribers'),
+                'affected_rows' => $result['affected_rows']
+            ));
+        } else {
+            wp_send_json_error(array(
+                'message' => __('Hubo un error al procesar tu desuscripción. Por favor, intenta de nuevo.', 'wp-subscribers')
+            ));
         }
     }
 
@@ -147,6 +205,38 @@ class WP_Subscribers_Form_Handler {
 
                 <div class="wp-subscribers-message" style="display: none;"></div>
             </form>
+
+            <!-- Formulario de desuscripción (oculto inicialmente) -->
+            <div class="wp-subscribers-unsubscribe-form" style="display: none;">
+                <div class="wp-subscribers-unsubscribe-message">
+                    <p><strong>⚠️ Ya estás suscrito con este correo electrónico.</strong></p>
+                    <p>Si deseas desuscribirte, esto te eliminará de <strong>TODOS los sitios de nuestra red</strong> (aproximadamente 20 sitios web).</p>
+                </div>
+
+                <div class="wp-subscribers-field">
+                    <label for="wp-subscribers-unsubscribe-reason">
+                        <?php _e('¿Por qué deseas desuscribirte? (opcional)', 'wp-subscribers'); ?>
+                    </label>
+                    <textarea
+                        id="wp-subscribers-unsubscribe-reason"
+                        name="unsubscribe_reason"
+                        class="wp-subscribers-textarea"
+                        rows="4"
+                        placeholder="Por ejemplo: Recibo demasiados correos, ya no me interesa el contenido, etc."
+                    ></textarea>
+                </div>
+
+                <div class="wp-subscribers-unsubscribe-actions">
+                    <button type="button" class="wp-subscribers-button-danger wp-subscribers-unsubscribe-confirm">
+                        <?php _e('Desuscribirme de Todos los Sitios', 'wp-subscribers'); ?>
+                    </button>
+                    <button type="button" class="wp-subscribers-button-secondary wp-subscribers-unsubscribe-cancel">
+                        <?php _e('Cancelar', 'wp-subscribers'); ?>
+                    </button>
+                </div>
+
+                <div class="wp-subscribers-unsubscribe-result" style="display: none;"></div>
+            </div>
         </div>
         <?php
         return ob_get_clean();
