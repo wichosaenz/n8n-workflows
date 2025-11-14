@@ -65,6 +65,8 @@ Después de activar el plugin:
 
 > **Nota:** El plugin creará automáticamente la tabla en tu base de datos si no existe.
 
+> **Alternativa:** También puedes crear la tabla manualmente usando los scripts SQL proporcionados en la carpeta `/sql/`. Ver sección [📊 Scripts SQL](#-scripts-sql) más abajo.
+
 ### 2. Configurar Etiquetas (Labels)
 
 Personaliza los textos del formulario en español o inglés:
@@ -98,6 +100,133 @@ Success: Thank you for subscribing!
 Error: An error occurred. Please try again.
 Duplicate: This email is already subscribed.
 ```
+
+---
+
+## 📊 Scripts SQL
+
+El plugin incluye un conjunto completo de scripts SQL para gestionar la base de datos de manera profesional. Todos los scripts están optimizados para **Dreamhost sin privilegios SUPER** y con binary logging habilitado.
+
+### 📁 Scripts Disponibles
+
+Ubicación: `/sql/`
+
+| Archivo | Descripción | Obligatorio |
+|---------|-------------|-------------|
+| **00-instalacion-rapida.sql** | Script todo-en-uno para instalación rápida | ⚡ Recomendado |
+| **01-crear-tabla-subscribers.sql** | Crea la tabla principal de suscriptores | ✅ Sí |
+| **02-datos-de-ejemplo.sql** | Inserta datos de prueba (10 registros) | ⚠️ Opcional |
+| **03-consultas-utiles.sql** | 25 consultas para gestión diaria | 📖 Referencia |
+| **04-mantenimiento-optimizacion.sql** | Mantenimiento y optimización periódica | 🔧 Mensual |
+| **README-SQL.md** | Documentación completa de SQL | 📚 Guía |
+
+### 🚀 Instalación Rápida con SQL
+
+Si prefieres crear la tabla manualmente antes de configurar el plugin:
+
+1. **Accede a phpMyAdmin** en tu panel de Dreamhost
+2. **Selecciona tu base de datos**
+3. Haz clic en la pestaña **SQL**
+4. **Copia y pega** el contenido de `00-instalacion-rapida.sql`
+5. Haz clic en **Continuar**
+6. ✅ ¡Tabla creada!
+
+### 📋 Estructura de la Tabla
+
+El plugin crea una tabla `subscribers` con la siguiente estructura:
+
+```sql
+CREATE TABLE subscribers (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    subscribed_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_address VARCHAR(45) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    updated_date DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+    source VARCHAR(100) NULL,
+    notes TEXT NULL,
+    -- Índices para optimización
+    INDEX idx_status (status),
+    INDEX idx_subscribed_date (subscribed_date),
+    INDEX idx_status_date (status, subscribed_date)
+) ENGINE=InnoDB CHARSET=utf8mb4;
+```
+
+**Campos principales:**
+- `id` - Identificador único autoincremental
+- `name` - Nombre del suscriptor
+- `email` - Email único del suscriptor
+- `subscribed_date` - Fecha/hora de suscripción
+- `ip_address` - IP del visitante (IPv4/IPv6)
+- `status` - Estado: `active`, `inactive`, `unsubscribed`, `bounced`
+- `source` - Origen: `shortcode`, `widget`, `manual`, `import`
+
+### 💡 Consultas Útiles Rápidas
+
+```sql
+-- Ver todos los suscriptores activos
+SELECT name, email, subscribed_date
+FROM subscribers
+WHERE status = 'active'
+ORDER BY subscribed_date DESC;
+
+-- Contar suscriptores por estado
+SELECT status, COUNT(*) as total
+FROM subscribers
+GROUP BY status;
+
+-- Exportar emails para newsletter
+SELECT email FROM subscribers
+WHERE status = 'active'
+ORDER BY email;
+
+-- Buscar suscriptor
+SELECT * FROM subscribers
+WHERE email = 'ejemplo@email.com';
+```
+
+### 🔧 Mantenimiento Periódico
+
+Ejecuta estas consultas mensualmente para mantener el rendimiento:
+
+```sql
+-- Analizar y optimizar tabla
+ANALYZE TABLE subscribers;
+OPTIMIZE TABLE subscribers;
+
+-- Verificar integridad
+CHECK TABLE subscribers;
+```
+
+### ⚠️ Consideraciones Importantes
+
+**Error #1419 - Sin privilegios SUPER:**
+
+Si ves este error en Dreamhost:
+```
+#1419 - You do not have the SUPER privilege and binary logging is enabled
+```
+
+✅ **Solución:** Usa solo los scripts SQL proporcionados. Están diseñados específicamente para funcionar sin privilegios SUPER.
+
+🚫 **Evita crear:**
+- Funciones (FUNCTION) con DETERMINISTIC
+- Procedimientos almacenados (PROCEDURE)
+- Triggers (TRIGGER)
+
+✅ **Puedes usar sin problema:**
+- CREATE TABLE, ALTER TABLE, DROP TABLE
+- INSERT, UPDATE, DELETE, SELECT
+- CREATE INDEX, DROP INDEX
+- ANALYZE, OPTIMIZE, CHECK, REPAIR
+
+### 📚 Documentación Completa
+
+Para más detalles sobre el uso de SQL, consulta:
+- **sql/README-SQL.md** - Guía completa de scripts SQL
+- **sql/03-consultas-utiles.sql** - 25 consultas listas para usar
+- **sql/04-mantenimiento-optimizacion.sql** - Guía de mantenimiento
 
 ---
 
@@ -352,21 +481,30 @@ Puedes exportar tu lista directamente desde phpMyAdmin o usando consultas SQL. T
 ```
 wp-subscribers-plugin/
 ├── admin/
-│   └── class-admin.php          # Panel de administración
+│   └── class-admin.php                    # Panel de administración
 ├── assets/
 │   ├── css/
-│   │   ├── admin.css            # Estilos del admin
-│   │   └── public.css           # Estilos públicos
+│   │   ├── admin.css                      # Estilos del admin
+│   │   └── public.css                     # Estilos públicos
 │   └── js/
-│       └── public.js            # JavaScript público
+│       └── public.js                      # JavaScript público
 ├── includes/
-│   ├── class-database.php       # Manejo de base de datos
-│   ├── class-form-handler.php   # Procesamiento del formulario
-│   ├── class-shortcode.php      # Shortcode
-│   └── class-widget.php         # Widget
-├── languages/                    # Carpeta para traducciones
-├── README.md                     # Este archivo
-└── wp-subscribers.php           # Archivo principal del plugin
+│   ├── class-database.php                 # Manejo de base de datos
+│   ├── class-form-handler.php             # Procesamiento del formulario
+│   ├── class-shortcode.php                # Shortcode
+│   └── class-widget.php                   # Widget
+├── languages/                              # Carpeta para traducciones
+├── sql/                                    # Scripts SQL
+│   ├── 00-instalacion-rapida.sql          # Instalación rápida todo-en-uno
+│   ├── 01-crear-tabla-subscribers.sql     # Crear tabla principal
+│   ├── 02-datos-de-ejemplo.sql            # Datos de prueba
+│   ├── 03-consultas-utiles.sql            # 25 consultas útiles
+│   ├── 04-mantenimiento-optimizacion.sql  # Mantenimiento periódico
+│   └── README-SQL.md                      # Documentación de SQL
+├── .gitignore                              # Archivos ignorados por git
+├── INSTALACION.txt                         # Guía de instalación
+├── README.md                               # Este archivo
+└── wp-subscribers.php                      # Archivo principal del plugin
 ```
 
 ---

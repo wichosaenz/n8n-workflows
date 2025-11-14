@@ -32,6 +32,19 @@ PASOS DE INSTALACIÓN
 
    NOTA: El plugin creará automáticamente la tabla necesaria.
 
+   ALTERNATIVA - CREAR TABLA MANUALMENTE CON SQL:
+   -----------------------------------------------
+   Si prefieres crear la tabla antes de configurar el plugin:
+
+   a) En phpMyAdmin, ve a la pestaña "SQL"
+   b) Abre el archivo: sql/00-instalacion-rapida.sql
+   c) Copia TODO el contenido del archivo
+   d) Pégalo en el editor SQL de phpMyAdmin
+   e) Haz clic en "Continuar"
+   f) Verifica que la tabla "subscribers" se haya creado
+
+   Ver la carpeta /sql/ para más scripts y documentación.
+
 3. CONFIGURAR EL PLUGIN
    ----------------------
    a) En WordPress, ve a: Suscriptores (en el menú lateral)
