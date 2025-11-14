@@ -210,7 +210,7 @@ class WP_Subscribers_Form_Handler {
             <div class="wp-subscribers-unsubscribe-form" style="display: none;">
                 <div class="wp-subscribers-unsubscribe-message">
                     <p><strong>⚠️ Ya estás suscrito con este correo electrónico.</strong></p>
-                    <p>Si deseas desuscribirte, esto te eliminará de <strong>TODOS los sitios de nuestra red</strong> (aproximadamente 20 sitios web).</p>
+                    <p>Si deseas desuscribirte, esto te eliminará de <strong>TODOS los sitios de nuestra red de invesgación</strong>.</p>
                 </div>
 
                 <div class="wp-subscribers-field">
