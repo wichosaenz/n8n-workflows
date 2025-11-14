@@ -76,7 +76,10 @@ class WP_Subscribers_Admin {
         check_ajax_referer('wp_subscribers_admin_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => 'Permisos insuficientes'));
+            wp_send_json_error(array(
+                'user_message' => 'Permisos insuficientes',
+                'debug_message' => 'Usuario no tiene capacidad manage_options'
+            ));
         }
 
         $db = new WP_Subscribers_Database();
@@ -388,14 +391,50 @@ status (VARCHAR 20, default: 'active')
                             nonce: '<?php echo wp_create_nonce('wp_subscribers_admin_nonce'); ?>'
                         },
                         success: function(response) {
+                            var html = '';
+
                             if (response.success) {
-                                status.html('<span style="color: green;">✓ ' + response.data.message + '</span>');
+                                // Mensaje de éxito
+                                var userMsg = response.data.user_message || response.data.message || 'Conexión exitosa';
+                                var debugMsg = response.data.debug_message || '';
+
+                                html = '<div style="padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px;">';
+                                html += '<span style="color: #155724; font-weight: bold;">✓ ' + userMsg + '</span>';
+
+                                if (debugMsg) {
+                                    html += '<div style="margin-top: 8px; padding: 8px; background: #e7f3e7; border-left: 3px solid #28a745; font-size: 12px; font-family: monospace; color: #155724;">';
+                                    html += '<strong>Debug técnico:</strong><br>' + debugMsg;
+                                    html += '</div>';
+                                }
+                                html += '</div>';
+
                             } else {
-                                status.html('<span style="color: red;">✗ ' + response.data.message + '</span>');
+                                // Mensaje de error
+                                var userMsg = response.data.user_message || response.data.message || 'Error de conexión';
+                                var debugMsg = response.data.debug_message || '';
+
+                                html = '<div style="padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;">';
+                                html += '<div style="color: #721c24; white-space: pre-line; line-height: 1.6;">' + userMsg + '</div>';
+
+                                if (debugMsg) {
+                                    html += '<div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-left: 3px solid #ffc107; font-size: 12px; font-family: monospace; color: #856404;">';
+                                    html += '<strong>🔍 Debug técnico (copia esto si necesitas soporte):</strong><br>';
+                                    html += '<code style="background: #fff; padding: 2px 4px; border-radius: 2px; display: inline-block; margin-top: 4px;">' + debugMsg + '</code>';
+                                    html += '</div>';
+                                }
+                                html += '</div>';
                             }
+
+                            status.html(html);
                         },
                         error: function() {
-                            status.html('<span style="color: red;">✗ <?php _e('Error al probar la conexión', 'wp-subscribers'); ?></span>');
+                            var html = '<div style="padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;">';
+                            html += '<span style="color: #721c24;">✗ <?php _e('Error al probar la conexión', 'wp-subscribers'); ?></span>';
+                            html += '<div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-left: 3px solid #ffc107; font-size: 12px; font-family: monospace; color: #856404;">';
+                            html += '<strong>Debug técnico:</strong><br>Error de comunicación AJAX con el servidor';
+                            html += '</div>';
+                            html += '</div>';
+                            status.html(html);
                         },
                         complete: function() {
                             button.prop('disabled', false).text('<?php _e('Probar Conexión', 'wp-subscribers'); ?>');
