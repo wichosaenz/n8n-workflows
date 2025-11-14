@@ -1,6 +1,6 @@
 # Guía de Scripts SQL - WP Subscribers Manager
 
-**Versión:** 1.0.0
+**Versión:** 1.2.0
 **Autor:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
 
@@ -68,6 +68,7 @@ Almacena toda la información de los suscriptores del sitio web.
 | `status` | VARCHAR(20) | NO | MUL | 'active' | Estado del suscriptor |
 | `updated_date` | DATETIME | YES | | NULL | Última modificación |
 | `source` | VARCHAR(100) | YES | | NULL | Origen de suscripción |
+| **`website_url`** | **VARCHAR(255)** | **YES** | **MUL** | **NULL** | **🆕 v1.2.0: URL del sitio web** |
 | `notes` | TEXT | YES | | NULL | Notas adicionales |
 
 #### Índices
@@ -79,6 +80,7 @@ Almacena toda la información de los suscriptores del sitio web.
 | idx_status | INDEX | `status` | Búsquedas por estado |
 | idx_subscribed_date | INDEX | `subscribed_date` | Ordenamiento por fecha |
 | idx_status_date | INDEX | `status`, `subscribed_date` | Filtrado combinado |
+| **idx_website_url** | **INDEX** | **`website_url`** | **🆕 v1.2.0: Búsquedas por sitio web** |
 
 #### Valores Válidos para `status`
 

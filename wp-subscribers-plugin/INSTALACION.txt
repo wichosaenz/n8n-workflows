@@ -4,7 +4,7 @@ WP SUBSCRIBERS MANAGER - INSTALACIÓN
 
 Desarrollado por: Wicho Saenz
 Sitio Web: www.wichosaenz.com
-Versión: 1.0.0
+Versión: 1.2.0
 
 =====================================
 PASOS DE INSTALACIÓN

@@ -1,6 +1,6 @@
 -- ============================================================================
 -- SCRIPT DE CREACIÓN DE TABLA DE SUSCRIPTORES
--- Plugin: WP Subscribers Manager v1.0.0
+-- Plugin: WP Subscribers Manager v1.2.0
 -- Autor: Wicho Saenz (www.wichosaenz.com)
 -- ============================================================================
 --
@@ -52,6 +52,9 @@ CREATE TABLE IF NOT EXISTS `subscribers` (
     -- Origen del suscriptor (opcional para tracking)
     `source` VARCHAR(100) NULL COMMENT 'Origen de la suscripción: widget, shortcode, manual, import',
 
+    -- URL del sitio web donde se registró el suscriptor
+    `website_url` VARCHAR(255) NULL COMMENT 'URL del sitio WordPress donde se registró (para múltiples sitios)',
+
     -- Notas adicionales
     `notes` TEXT NULL COMMENT 'Notas adicionales sobre el suscriptor',
 
@@ -68,7 +71,10 @@ CREATE TABLE IF NOT EXISTS `subscribers` (
     KEY `idx_subscribed_date` (`subscribed_date`),
 
     -- Índice compuesto para filtrado común
-    KEY `idx_status_date` (`status`, `subscribed_date`)
+    KEY `idx_status_date` (`status`, `subscribed_date`),
+
+    -- Índice para búsquedas por sitio web
+    KEY `idx_website_url` (`website_url`(100))
 
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4

@@ -1,6 +1,6 @@
 -- ============================================================================
 -- INSTALACIÓN RÁPIDA - TODO EN UNO
--- Plugin: WP Subscribers Manager v1.0.0
+-- Plugin: WP Subscribers Manager v1.2.0
 -- Autor: Wicho Saenz (www.wichosaenz.com)
 -- ============================================================================
 --
@@ -35,16 +35,18 @@ CREATE TABLE IF NOT EXISTS `subscribers` (
     `status` VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT 'Estado: active, inactive, unsubscribed, bounced',
     `updated_date` DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT 'Fecha de última actualización',
     `source` VARCHAR(100) NULL COMMENT 'Origen de la suscripción: widget, shortcode, manual, import',
+    `website_url` VARCHAR(255) NULL COMMENT 'URL del sitio WordPress donde se registró (para múltiples sitios)',
     `notes` TEXT NULL COMMENT 'Notas adicionales sobre el suscriptor',
     PRIMARY KEY (`id`),
     UNIQUE KEY `idx_email_unique` (`email`),
     KEY `idx_status` (`status`),
     KEY `idx_subscribed_date` (`subscribed_date`),
-    KEY `idx_status_date` (`status`, `subscribed_date`)
+    KEY `idx_status_date` (`status`, `subscribed_date`),
+    KEY `idx_website_url` (`website_url`(100))
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
-  COMMENT='Tabla de suscriptores del sitio web';
+  COMMENT='Tabla de suscriptores para múltiples sitios web';
 
 -- ============================================================================
 -- VERIFICAR INSTALACIÓN
