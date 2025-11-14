@@ -2,7 +2,7 @@
 
 Plugin de WordPress para gestionar una lista de suscriptores con base de datos MySQL personalizada en Dreamhost.
 
-**Versión:** 1.0.0
+**Versión:** 1.2.0
 **Autor:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
 
@@ -24,6 +24,8 @@ WP Subscribers Manager es un plugin completo para WordPress que te permite crear
 ✅ Interfaz de administración intuitiva
 ✅ Envío de formulario con AJAX (sin recargar página)
 ✅ Responsive y compatible con dispositivos móviles
+✅ **NUEVO v1.2.0:** Tracking automático de múltiples sitios web
+✅ **NUEVO v1.2.0:** Identificación del sitio de origen de cada suscriptor
 
 ---
 
@@ -145,11 +147,13 @@ CREATE TABLE subscribers (
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     updated_date DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
     source VARCHAR(100) NULL,
+    website_url VARCHAR(255) NULL,
     notes TEXT NULL,
     -- Índices para optimización
     INDEX idx_status (status),
     INDEX idx_subscribed_date (subscribed_date),
-    INDEX idx_status_date (status, subscribed_date)
+    INDEX idx_status_date (status, subscribed_date),
+    INDEX idx_website_url (website_url(100))
 ) ENGINE=InnoDB CHARSET=utf8mb4;
 ```
 
@@ -161,6 +165,7 @@ CREATE TABLE subscribers (
 - `ip_address` - IP del visitante (IPv4/IPv6)
 - `status` - Estado: `active`, `inactive`, `unsubscribed`, `bounced`
 - `source` - Origen: `shortcode`, `widget`, `manual`, `import`
+- **`website_url`** - 🆕 **v1.2.0:** URL del sitio WordPress donde se registró (para múltiples sitios)
 
 ### 💡 Consultas Útiles Rápidas
 
@@ -184,6 +189,18 @@ ORDER BY email;
 -- Buscar suscriptor
 SELECT * FROM subscribers
 WHERE email = 'ejemplo@email.com';
+
+-- 🆕 v1.2.0: Suscriptores por sitio web
+SELECT website_url, COUNT(*) as total
+FROM subscribers
+GROUP BY website_url
+ORDER BY total DESC;
+
+-- 🆕 v1.2.0: Ver suscriptores de un sitio específico
+SELECT name, email, subscribed_date
+FROM subscribers
+WHERE website_url = 'https://tusitio.com'
+ORDER BY subscribed_date DESC;
 ```
 
 ### 🔧 Mantenimiento Periódico
@@ -524,6 +541,15 @@ Este plugin está licenciado bajo GPL v2 o posterior.
 ---
 
 ## 🔄 Changelog
+
+### Versión 1.2.0 (2024)
+- 🆕 **Tracking de múltiples sitios web**: Ahora registra automáticamente la URL del sitio donde se suscribe cada usuario
+- 🆕 **Campo `website_url`**: Nuevo campo en la base de datos para identificar el sitio de origen
+- 🆕 **Índice optimizado**: Nuevo índice en `website_url` para búsquedas rápidas
+- 🆕 **Consultas SQL nuevas**: 4 consultas adicionales para análisis por sitio web
+- ✨ **Perfecto para múltiples sitios**: Ideal cuando usas la misma base de datos para varios sitios WordPress
+- 📊 **Scripts SQL actualizados**: Todos los scripts incluyen el nuevo campo
+- 📚 **Documentación mejorada**: Guías específicas para uso con múltiples sitios
 
 ### Versión 1.0.0 (2024)
 - ✨ Lanzamiento inicial

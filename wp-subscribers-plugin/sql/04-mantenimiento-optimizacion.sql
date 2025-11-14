@@ -1,6 +1,6 @@
 -- ============================================================================
 -- SCRIPT DE MANTENIMIENTO Y OPTIMIZACIÓN
--- Plugin: WP Subscribers Manager v1.0.0
+-- Plugin: WP Subscribers Manager v1.2.0
 -- Autor: Wicho Saenz (www.wichosaenz.com)
 -- ============================================================================
 --

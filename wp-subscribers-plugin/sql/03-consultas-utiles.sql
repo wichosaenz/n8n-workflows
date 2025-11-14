@@ -1,6 +1,6 @@
 -- ============================================================================
 -- CONSULTAS ÚTILES PARA GESTIÓN DE SUSCRIPTORES
--- Plugin: WP Subscribers Manager v1.0.0
+-- Plugin: WP Subscribers Manager v1.2.0
 -- Autor: Wicho Saenz (www.wichosaenz.com)
 -- ============================================================================
 --
@@ -120,6 +120,59 @@ SELECT
     (SELECT COUNT(*) FROM `subscribers` WHERE DATE(`subscribed_date`) = CURDATE()) AS 'Hoy',
     (SELECT COUNT(*) FROM `subscribers` WHERE DATE(`subscribed_date`) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)) AS 'Últimos 7 días',
     (SELECT COUNT(*) FROM `subscribers` WHERE DATE(`subscribed_date`) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)) AS 'Últimos 30 días';
+
+
+-- ============================================================================
+-- CONSULTAS POR SITIO WEB (NUEVO EN v1.2.0)
+-- ============================================================================
+
+-- 9A. SUSCRIPTORES POR SITIO WEB
+-- ----------------------------------------------------------------------------
+SELECT
+    COALESCE(`website_url`, 'No especificado') AS 'Sitio Web',
+    COUNT(*) AS 'Total Suscriptores',
+    SUM(CASE WHEN `status` = 'active' THEN 1 ELSE 0 END) AS 'Activos',
+    SUM(CASE WHEN `status` = 'inactive' THEN 1 ELSE 0 END) AS 'Inactivos'
+FROM `subscribers`
+GROUP BY `website_url`
+ORDER BY COUNT(*) DESC;
+
+
+-- 9B. VER SUSCRIPTORES DE UN SITIO WEB ESPECÍFICO
+-- ----------------------------------------------------------------------------
+-- REEMPLAZA 'https://tusitio.com' con la URL de tu sitio
+SELECT
+    `name`,
+    `email`,
+    `status`,
+    DATE_FORMAT(`subscribed_date`, '%d/%m/%Y') AS 'fecha'
+FROM `subscribers`
+WHERE `website_url` = 'https://tusitio.com'
+ORDER BY `subscribed_date` DESC;
+
+
+-- 9C. ESTADÍSTICAS POR SITIO WEB Y ESTADO
+-- ----------------------------------------------------------------------------
+SELECT
+    COALESCE(`website_url`, 'No especificado') AS 'Sitio',
+    `status` AS 'Estado',
+    COUNT(*) AS 'Cantidad'
+FROM `subscribers`
+GROUP BY `website_url`, `status`
+ORDER BY `website_url`, `status`;
+
+
+-- 9D. SITIOS WEB CON MÁS SUSCRIPTORES ACTIVOS
+-- ----------------------------------------------------------------------------
+SELECT
+    `website_url` AS 'Sitio Web',
+    COUNT(*) AS 'Suscriptores Activos'
+FROM `subscribers`
+WHERE `status` = 'active'
+AND `website_url` IS NOT NULL
+GROUP BY `website_url`
+ORDER BY COUNT(*) DESC
+LIMIT 10;
 
 
 -- ============================================================================

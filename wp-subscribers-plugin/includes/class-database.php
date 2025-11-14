@@ -88,9 +88,12 @@ class WP_Subscribers_Database {
             return array('success' => false, 'message' => 'duplicate');
         }
 
+        // Obtener URL del sitio web actual (para múltiples sitios)
+        $website_url = $connection->real_escape_string(esc_url(home_url()));
+
         $table = $this->settings['db_table'];
-        $query = "INSERT INTO `{$table}` (name, email, subscribed_date, ip_address)
-                  VALUES ('{$name}', '{$email}', NOW(), '{$_SERVER['REMOTE_ADDR']}')";
+        $query = "INSERT INTO `{$table}` (name, email, subscribed_date, ip_address, website_url)
+                  VALUES ('{$name}', '{$email}', NOW(), '{$_SERVER['REMOTE_ADDR']}', '{$website_url}')";
 
         if ($connection->query($query)) {
             return array('success' => true, 'message' => 'success');
@@ -137,14 +140,21 @@ class WP_Subscribers_Database {
         $table = $this->settings['db_table'];
 
         $query = "CREATE TABLE IF NOT EXISTS `{$table}` (
-            id INT AUTO_INCREMENT PRIMARY KEY,
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             email VARCHAR(255) NOT NULL UNIQUE,
-            subscribed_date DATETIME NOT NULL,
+            subscribed_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             ip_address VARCHAR(45),
             status VARCHAR(20) DEFAULT 'active',
+            updated_date DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            source VARCHAR(100) NULL,
+            website_url VARCHAR(255) NULL COMMENT 'URL del sitio WordPress (para múltiples sitios)',
+            notes TEXT NULL,
             INDEX idx_email (email),
-            INDEX idx_status (status)
+            INDEX idx_status (status),
+            INDEX idx_subscribed_date (subscribed_date),
+            INDEX idx_status_date (status, subscribed_date),
+            INDEX idx_website_url (website_url(100))
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
         return $connection->query($query);
