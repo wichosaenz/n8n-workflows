@@ -2,7 +2,7 @@
 
 Plugin de WordPress para gestionar una lista de suscriptores con base de datos MySQL personalizada en Dreamhost.
 
-**Versión:** 1.2.0
+**Versión:** 1.3.0
 **Autor:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
 
@@ -24,8 +24,14 @@ WP Subscribers Manager es un plugin completo para WordPress que te permite crear
 ✅ Interfaz de administración intuitiva
 ✅ Envío de formulario con AJAX (sin recargar página)
 ✅ Responsive y compatible con dispositivos móviles
-✅ **NUEVO v1.2.0:** Tracking automático de múltiples sitios web
-✅ **NUEVO v1.2.0:** Identificación del sitio de origen de cada suscriptor
+✅ **NUEVO v1.3.0:** Lista completa de suscriptores con filtros por sitio
+✅ **NUEVO v1.3.0:** Estadísticas de suscriptores en tiempo real
+✅ **NUEVO v1.3.0:** Cambio de estado de suscriptores desde el admin
+✅ **NUEVO v1.3.0:** Desuscripción inteligente con detección automática
+✅ **NUEVO v1.3.0:** Sistema de desuscripción de toda la red con razones
+✅ **NUEVO v1.3.0:** Registro de notas con timestamp para auditoría
+✅ v1.2.0: Tracking automático de múltiples sitios web
+✅ v1.2.0: Identificación del sitio de origen de cada suscriptor
 
 ---
 
@@ -498,16 +504,17 @@ Puedes exportar tu lista directamente desde phpMyAdmin o usando consultas SQL. T
 ```
 wp-subscribers-plugin/
 ├── admin/
-│   └── class-admin.php                    # Panel de administración
+│   ├── class-admin.php                    # Panel de administración
+│   └── class-subscribers-list.php         # 🆕 v1.3.0: Lista de suscriptores
 ├── assets/
 │   ├── css/
 │   │   ├── admin.css                      # Estilos del admin
-│   │   └── public.css                     # Estilos públicos
+│   │   └── public.css                     # Estilos públicos (con unsubscribe UI)
 │   └── js/
-│       └── public.js                      # JavaScript público
+│       └── public.js                      # JavaScript público (con unsubscribe)
 ├── includes/
-│   ├── class-database.php                 # Manejo de base de datos
-│   ├── class-form-handler.php             # Procesamiento del formulario
+│   ├── class-database.php                 # Manejo de base de datos (con métodos v1.3.0)
+│   ├── class-form-handler.php             # Procesamiento del formulario (con unsubscribe)
 │   ├── class-shortcode.php                # Shortcode
 │   └── class-widget.php                   # Widget
 ├── languages/                              # Carpeta para traducciones
@@ -530,7 +537,7 @@ wp-subscribers-plugin/
 
 **Desarrollador:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
-**Versión:** 1.0.0
+**Versión:** 1.3.0
 
 ---
 
@@ -541,6 +548,34 @@ Este plugin está licenciado bajo GPL v2 o posterior.
 ---
 
 ## 🔄 Changelog
+
+### Versión 1.3.0 (2024) 🎉
+- 🆕 **Lista completa de suscriptores**: Nueva página de administración que muestra todos los suscriptores con tabla interactiva
+- 🆕 **Estadísticas en tiempo real**: Dashboard con 5 tarjetas mostrando total, activos, inactivos, desuscritos y rebotados
+- 🆕 **Filtros por sitio web**: Toggle para ver suscriptores solo del sitio actual o de toda la red (~20 sitios)
+- 🆕 **Gestión de estados**: Cambiar estado de suscriptores (active, inactive, unsubscribed, bounced) desde el admin
+- 🆕 **Modal de edición**: Interfaz moderna para cambiar estado con campo de notas
+- 🆕 **Desuscripción inteligente**: Detecta automáticamente cuando un email ya existe al intentar suscribirse
+- 🆕 **UI de desuscripción**: Formulario frontend que aparece automáticamente para suscriptores existentes
+- 🆕 **Desuscripción de red completa**: Botón para desuscribir de TODOS los sitios de la red con advertencia clara
+- 🆕 **Sistema de razones**: Campo de texto para que el usuario indique por qué se desuscribe
+- 🆕 **Registro de notas con timestamp**: Todas las acciones quedan registradas con fecha y hora en el campo notes
+- 🆕 **Confirmación de acciones críticas**: Diálogo de confirmación JavaScript para desuscripción de toda la red
+- 🆕 **Botones de cancelar**: Opción de volver atrás en cualquier momento del proceso de desuscripción
+- 🆕 **AJAX completo**: Todas las operaciones sin recargar página (lista, filtros, cambios de estado, desuscripción)
+- 🆕 **CSS mejorado**: Estilos para tabla de suscriptores, modales, botones de peligro/secundarios, y formulario unsubscribe
+- 🆕 **Responsive design**: Interfaz optimizada para móviles con botones apilados y formularios adaptables
+- ⚡ **Métodos de base de datos nuevos**: get_subscribers(), get_statistics(), update_subscriber_status(), unsubscribe_from_all_sites(), get_subscriber_by_email()
+- 📱 **UX optimizada**: Mensajes claros, advertencias visuales, y flujo intuitivo para el usuario final
+- 🔒 **Seguridad mejorada**: Verificación de nonce en todas las operaciones AJAX públicas y privadas
+
+### Versión 1.2.1 (2024)
+- 🆕 **Sistema de debug por capas**: Validación detallada con 6 capas de diagnóstico de conexión
+- 🆕 **Mensajes amigables y técnicos**: user_message para el usuario y debug_message para soporte técnico
+- 🆕 **Identificación de errores MySQL**: Análisis específico de errores 2002, 2003, 2005, 2006, 1045, 1049, 1044, 2013
+- 🆕 **Guías contextuales**: Cada error incluye pasos específicos para solucionarlo
+- 🆕 **UI mejorada en admin**: Muestra mensajes de debug en panel amarillo con formato código
+- 📚 **Documentación de troubleshooting**: Explicación detallada del sistema de capas
 
 ### Versión 1.2.0 (2024)
 - 🆕 **Tracking de múltiples sitios web**: Ahora registra automáticamente la URL del sitio donde se suscribe cada usuario
