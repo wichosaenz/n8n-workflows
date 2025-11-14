@@ -1,0 +1,122 @@
+/**
+ * Estilos públicos del formulario de suscriptores
+ * Diseñado para adaptarse al CSS del tema activo
+ */
+
+.wp-subscribers-form-wrapper {
+    margin: 20px 0;
+    padding: 0;
+}
+
+.wp-subscribers-form-title {
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.wp-subscribers-form {
+    max-width: 500px;
+}
+
+.wp-subscribers-field {
+    margin-bottom: 15px;
+}
+
+.wp-subscribers-field label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.wp-subscribers-field .required {
+    color: #dc3232;
+}
+
+.wp-subscribers-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.3s ease;
+    box-sizing: border-box;
+}
+
+.wp-subscribers-input:focus {
+    outline: none;
+    border-color: #0073aa;
+    box-shadow: 0 0 0 1px #0073aa;
+}
+
+.wp-subscribers-submit {
+    margin-top: 20px;
+}
+
+.wp-subscribers-button {
+    padding: 12px 24px;
+    background-color: #0073aa;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.wp-subscribers-button:hover {
+    background-color: #005177;
+}
+
+.wp-subscribers-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.wp-subscribers-message {
+    margin-top: 15px;
+    padding: 12px 15px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.wp-subscribers-message.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.wp-subscribers-message.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* Adaptabilidad al tema */
+.wp-subscribers-form input[type="text"],
+.wp-subscribers-form input[type="email"] {
+    font-family: inherit;
+}
+
+.wp-subscribers-button {
+    font-family: inherit;
+}
+
+/* Widget específico */
+.widget .wp-subscribers-form-wrapper {
+    margin: 0;
+}
+
+.widget .wp-subscribers-form {
+    max-width: 100%;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .wp-subscribers-form {
+        max-width: 100%;
+    }
+
+    .wp-subscribers-button {
+        width: 100%;
+    }
+}
