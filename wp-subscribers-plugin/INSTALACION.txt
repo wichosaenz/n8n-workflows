@@ -1,0 +1,203 @@
+=====================================
+WP SUBSCRIBERS MANAGER - INSTALACIÓN
+=====================================
+
+Desarrollado por: Wicho Saenz
+Sitio Web: www.wichosaenz.com
+Versión: 1.0.0
+
+=====================================
+PASOS DE INSTALACIÓN
+=====================================
+
+1. SUBIR EL PLUGIN A WORDPRESS
+   -------------------------------
+   a) Accede a tu panel de administración de WordPress
+   b) Ve a: Plugins > Añadir nuevo
+   c) Haz clic en "Subir plugin"
+   d) Selecciona el archivo wp-subscribers-plugin.zip
+   e) Haz clic en "Instalar ahora"
+   f) Activa el plugin después de la instalación
+
+2. PREPARAR LA BASE DE DATOS EN DREAMHOST
+   ----------------------------------------
+   a) Accede a tu panel de Dreamhost
+   b) Ve a "MySQL Databases" (Bases de datos MySQL)
+   c) Crea una nueva base de datos o usa una existente
+   d) Anota los siguientes datos:
+      - Hostname (ej: mysql.example.dreamhosters.com)
+      - Nombre de la base de datos
+      - Nombre de usuario
+      - Contraseña
+
+   NOTA: El plugin creará automáticamente la tabla necesaria.
+
+   ALTERNATIVA - CREAR TABLA MANUALMENTE CON SQL:
+   -----------------------------------------------
+   Si prefieres crear la tabla antes de configurar el plugin:
+
+   a) En phpMyAdmin, ve a la pestaña "SQL"
+   b) Abre el archivo: sql/00-instalacion-rapida.sql
+   c) Copia TODO el contenido del archivo
+   d) Pégalo en el editor SQL de phpMyAdmin
+   e) Haz clic en "Continuar"
+   f) Verifica que la tabla "subscribers" se haya creado
+
+   Ver la carpeta /sql/ para más scripts y documentación.
+
+3. CONFIGURAR EL PLUGIN
+   ----------------------
+   a) En WordPress, ve a: Suscriptores (en el menú lateral)
+   b) Completa la sección "Configuración de Base de Datos":
+      - Host de Base de Datos: [tu hostname de Dreamhost]
+      - Nombre de Base de Datos: [nombre de tu BD]
+      - Usuario de Base de Datos: [tu usuario]
+      - Contraseña de Base de Datos: [tu contraseña]
+      - Nombre de Tabla: subscribers (o el nombre que prefieras)
+
+   c) Haz clic en "Probar Conexión" para verificar
+   d) Si la conexión es exitosa, haz clic en "Guardar Configuración"
+
+4. PERSONALIZAR LOS TEXTOS (OPCIONAL)
+   ------------------------------------
+   En la misma página de configuración:
+
+   a) Desplázate a "Configuración de Etiquetas (Labels)"
+   b) Personaliza los textos según tu idioma:
+      - Para español: usa los valores predeterminados
+      - Para inglés: cambia los textos (ver ejemplos abajo)
+   c) Guarda los cambios
+
+   EJEMPLOS DE TEXTOS:
+
+   ESPAÑOL (por defecto):
+   - Título: Suscríbete a nuestro boletín
+   - Nombre: Nombre
+   - Email: Correo electrónico
+   - Botón: Suscribirse
+   - Éxito: ¡Gracias por suscribirte!
+   - Error: Hubo un error. Por favor, intenta de nuevo.
+   - Duplicado: Este correo ya está suscrito.
+
+   INGLÉS:
+   - Title: Subscribe to our newsletter
+   - Name: Name
+   - Email: Email address
+   - Button: Subscribe
+   - Success: Thank you for subscribing!
+   - Error: An error occurred. Please try again.
+   - Duplicate: This email is already subscribed.
+
+5. INSERTAR EL FORMULARIO EN TU SITIO
+   ------------------------------------
+
+   OPCIÓN A - USAR SHORTCODE:
+   ---------------------------
+   1. Edita una página o entrada donde quieras el formulario
+   2. Pega el siguiente código:
+
+      [wp_subscribers_form]
+
+   3. Publica o actualiza la página
+
+   PERSONALIZAR SHORTCODE:
+   [wp_subscribers_form title="Título personalizado" show_title="yes"]
+
+   OPCIÓN B - USAR WIDGET:
+   ------------------------
+   1. Ve a: Apariencia > Widgets
+   2. Busca "Formulario de Suscriptores"
+   3. Arrástralo al área de widgets deseada
+   4. Configura el título
+   5. Guarda los cambios
+
+6. PROBAR EL FORMULARIO
+   ---------------------
+   a) Visita la página donde insertaste el formulario
+   b) Completa el formulario con datos de prueba
+   c) Verifica que aparezca el mensaje de éxito
+   d) Verifica en tu base de datos que se guardó el registro
+
+7. VERIFICAR LA BASE DE DATOS (OPCIONAL)
+   ---------------------------------------
+   Para ver tus suscriptores:
+
+   a) Accede a phpMyAdmin en Dreamhost
+   b) Selecciona tu base de datos
+   c) Busca la tabla "subscribers" (o el nombre que configuraste)
+   d) Haz clic en "Explorar" para ver los registros
+
+=====================================
+SOLUCIÓN DE PROBLEMAS
+=====================================
+
+PROBLEMA: Error de conexión a la base de datos
+SOLUCIÓN:
+- Verifica que los datos sean correctos
+- Asegúrate de que tu IP esté autorizada en Dreamhost
+- Usa el botón "Probar Conexión" para diagnosticar
+
+PROBLEMA: El formulario no se muestra
+SOLUCIÓN:
+- Verifica que el plugin esté activado
+- Comprueba que el shortcode sea correcto
+- Limpia la caché del sitio
+
+PROBLEMA: El formulario no envía datos
+SOLUCIÓN:
+- Verifica que JavaScript esté habilitado
+- Abre la consola del navegador (F12) y busca errores
+- Desactiva otros plugins temporalmente para detectar conflictos
+
+=====================================
+CONSULTAS SQL ÚTILES
+=====================================
+
+Ver todos los suscriptores:
+---------------------------
+SELECT * FROM subscribers ORDER BY subscribed_date DESC;
+
+Contar suscriptores:
+--------------------
+SELECT COUNT(*) as total FROM subscribers;
+
+Buscar por email:
+-----------------
+SELECT * FROM subscribers WHERE email = 'ejemplo@email.com';
+
+Exportar lista:
+---------------
+SELECT name, email, subscribed_date
+FROM subscribers
+WHERE status = 'active'
+ORDER BY subscribed_date DESC;
+
+=====================================
+ESTRUCTURA DE LA TABLA
+=====================================
+
+La tabla se crea automáticamente con esta estructura:
+
+CREATE TABLE subscribers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    subscribed_date DATETIME NOT NULL,
+    ip_address VARCHAR(45),
+    status VARCHAR(20) DEFAULT 'active',
+    INDEX idx_email (email),
+    INDEX idx_status (status)
+);
+
+=====================================
+CONTACTO Y SOPORTE
+=====================================
+
+Desarrollador: Wicho Saenz
+Sitio Web: www.wichosaenz.com
+
+Para soporte, visita www.wichosaenz.com
+
+=====================================
+© 2024 Wicho Saenz
+=====================================
