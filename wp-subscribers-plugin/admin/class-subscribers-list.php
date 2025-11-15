@@ -40,7 +40,7 @@ class WP_Subscribers_List_Page {
         check_ajax_referer('wp_subscribers_admin_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => 'Permisos insuficientes'));
+            wp_send_json_error(array('message' => __('Permisos insuficientes', 'wp-subscribers')));
         }
 
         $filter = isset($_POST['filter']) ? sanitize_text_field($_POST['filter']) : 'all';
@@ -60,7 +60,7 @@ class WP_Subscribers_List_Page {
                 'current_site' => $current_site_url
             ));
         } else {
-            wp_send_json_error(array('message' => 'Error al obtener suscriptores'));
+            wp_send_json_error(array('message' => __('Error al obtener suscriptores', 'wp-subscribers')));
         }
     }
 
@@ -71,7 +71,7 @@ class WP_Subscribers_List_Page {
         check_ajax_referer('wp_subscribers_admin_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => 'Permisos insuficientes'));
+            wp_send_json_error(array('message' => __('Permisos insuficientes', 'wp-subscribers')));
         }
 
         $email = isset($_POST['email']) ? sanitize_email($_POST['email']) : '';
@@ -79,7 +79,7 @@ class WP_Subscribers_List_Page {
         $notes = isset($_POST['notes']) ? sanitize_textarea_field($_POST['notes']) : '';
 
         if (empty($email) || empty($status)) {
-            wp_send_json_error(array('message' => 'Email y estado son requeridos'));
+            wp_send_json_error(array('message' => __('Email y estado son requeridos', 'wp-subscribers')));
         }
 
         $db = new WP_Subscribers_Database();
@@ -99,14 +99,14 @@ class WP_Subscribers_List_Page {
         check_ajax_referer('wp_subscribers_admin_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => 'Permisos insuficientes'));
+            wp_send_json_error(array('message' => __('Permisos insuficientes', 'wp-subscribers')));
         }
 
         $email = isset($_POST['email']) ? sanitize_email($_POST['email']) : '';
         $reason = isset($_POST['reason']) ? sanitize_textarea_field($_POST['reason']) : '';
 
         if (empty($email)) {
-            wp_send_json_error(array('message' => 'Email es requerido'));
+            wp_send_json_error(array('message' => __('Email es requerido', 'wp-subscribers')));
         }
 
         $db = new WP_Subscribers_Database();
@@ -127,6 +127,30 @@ class WP_Subscribers_List_Page {
             return;
         }
 
+        // Localizar strings para JavaScript
+        wp_localize_script('jquery', 'wpSubscribersListI18n', array(
+            'loading' => __('Cargando...', 'wp-subscribers'),
+            'loadError' => __('Error al cargar suscriptores', 'wp-subscribers'),
+            'connectionError' => __('Error de conexión', 'wp-subscribers'),
+            'noSubscribers' => __('No hay suscriptores', 'wp-subscribers'),
+            'statusActive' => __('Activo', 'wp-subscribers'),
+            'statusInactive' => __('Inactivo', 'wp-subscribers'),
+            'statusUnsubscribed' => __('Desuscrito', 'wp-subscribers'),
+            'statusBounced' => __('Rebotado', 'wp-subscribers'),
+            'changeStatusButton' => __('Cambiar Estado', 'wp-subscribers'),
+            'unsubscribeAllButton' => __('Desuscribir de Todos', 'wp-subscribers'),
+            'statusUpdated' => __('Estado actualizado correctamente', 'wp-subscribers'),
+            'error' => __('Error', 'wp-subscribers'),
+            'unsubscribePrompt' => __('¿Por qué razón %s se desuscribe de TODOS los sitios?\n(Esta información se guardará en las notas)', 'wp-subscribers'),
+            'unsubscribeConfirm' => __('¿Estás seguro de desuscribir a %s (%s) de TODOS los sitios de la red?\n\nEsta acción afectará a todos los sitios donde esté registrado.', 'wp-subscribers'),
+            'unsubscribeSuccess' => __('Desuscrito exitosamente de %d registro(s)', 'wp-subscribers'),
+            'total' => __('Total', 'wp-subscribers'),
+            'active' => __('Activos', 'wp-subscribers'),
+            'inactive' => __('Inactivos', 'wp-subscribers'),
+            'unsubscribed' => __('Desuscritos', 'wp-subscribers'),
+            'bounced' => __('Rebotados', 'wp-subscribers')
+        ));
+
         $current_site_url = esc_url(home_url());
         ?>
         <div class="wrap">
@@ -136,23 +160,23 @@ class WP_Subscribers_List_Page {
             <div id="subscribers-stats" class="wp-subscribers-stats-grid">
                 <div class="stat-card">
                     <div class="stat-value" id="stat-total">-</div>
-                    <div class="stat-label">Total</div>
+                    <div class="stat-label"><?php _e('Total', 'wp-subscribers'); ?></div>
                 </div>
                 <div class="stat-card stat-active">
                     <div class="stat-value" id="stat-active">-</div>
-                    <div class="stat-label">Activos</div>
+                    <div class="stat-label"><?php _e('Activos', 'wp-subscribers'); ?></div>
                 </div>
                 <div class="stat-card stat-inactive">
                     <div class="stat-value" id="stat-inactive">-</div>
-                    <div class="stat-label">Inactivos</div>
+                    <div class="stat-label"><?php _e('Inactivos', 'wp-subscribers'); ?></div>
                 </div>
                 <div class="stat-card stat-unsubscribed">
                     <div class="stat-value" id="stat-unsubscribed">-</div>
-                    <div class="stat-label">Desuscritos</div>
+                    <div class="stat-label"><?php _e('Desuscritos', 'wp-subscribers'); ?></div>
                 </div>
                 <div class="stat-card stat-bounced">
                     <div class="stat-value" id="stat-bounced">-</div>
-                    <div class="stat-label">Rebotados</div>
+                    <div class="stat-label"><?php _e('Rebotados', 'wp-subscribers'); ?></div>
                 </div>
             </div>
 
@@ -334,7 +358,7 @@ class WP_Subscribers_List_Page {
             let currentFilter = 'current_site';
 
             function loadSubscribers() {
-                $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 40px;"><span class="spinner is-active" style="float: none; margin: 0;"></span><p>Cargando...</p></td></tr>');
+                $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 40px;"><span class="spinner is-active" style="float: none; margin: 0;"></span><p>' + wpSubscribersListI18n.loading + '</p></td></tr>');
 
                 $.ajax({
                     url: ajaxurl,
@@ -349,11 +373,11 @@ class WP_Subscribers_List_Page {
                             renderSubscribers(response.data.subscribers);
                             renderStats(response.data.stats);
                         } else {
-                            $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 20px; color: #dc3232;">Error al cargar suscriptores</td></tr>');
+                            $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 20px; color: #dc3232;">' + wpSubscribersListI18n.loadError + '</td></tr>');
                         }
                     },
                     error: function() {
-                        $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 20px; color: #dc3232;">Error de conexión</td></tr>');
+                        $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 20px; color: #dc3232;">' + wpSubscribersListI18n.connectionError + '</td></tr>');
                     }
                 });
             }
@@ -368,16 +392,16 @@ class WP_Subscribers_List_Page {
 
             function renderSubscribers(subscribers) {
                 if (subscribers.length === 0) {
-                    $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 20px;">No hay suscriptores</td></tr>');
+                    $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 20px;">' + wpSubscribersListI18n.noSubscribers + '</td></tr>');
                     return;
                 }
 
                 let html = '';
                 subscribers.forEach(function(sub) {
                     let statusClass = 'status-' + sub.status;
-                    let statusText = sub.status === 'active' ? 'Activo' :
-                                    sub.status === 'inactive' ? 'Inactivo' :
-                                    sub.status === 'unsubscribed' ? 'Desuscrito' : 'Rebotado';
+                    let statusText = sub.status === 'active' ? wpSubscribersListI18n.statusActive :
+                                    sub.status === 'inactive' ? wpSubscribersListI18n.statusInactive :
+                                    sub.status === 'unsubscribed' ? wpSubscribersListI18n.statusUnsubscribed : wpSubscribersListI18n.statusBounced;
 
                     html += '<tr>';
                     html += '<td><strong>' + escapeHtml(sub.name) + '</strong></td>';
@@ -387,9 +411,9 @@ class WP_Subscribers_List_Page {
                     html += '<td>' + formatDate(sub.subscribed_date) + '</td>';
                     html += '<td>' + (sub.source || '-') + '</td>';
                     html += '<td>';
-                    html += '<button class="button button-small action-button change-status" data-email="' + sub.email + '" data-name="' + escapeHtml(sub.name) + '" data-status="' + sub.status + '">Cambiar Estado</button>';
+                    html += '<button class="button button-small action-button change-status" data-email="' + sub.email + '" data-name="' + escapeHtml(sub.name) + '" data-status="' + sub.status + '">' + wpSubscribersListI18n.changeStatusButton + '</button>';
                     if (sub.status !== 'unsubscribed') {
-                        html += '<button class="button button-small action-button button-link-delete unsubscribe-all" data-email="' + sub.email + '" data-name="' + escapeHtml(sub.name) + '">Desuscribir de Todos</button>';
+                        html += '<button class="button button-small action-button button-link-delete unsubscribe-all" data-email="' + sub.email + '" data-name="' + escapeHtml(sub.name) + '">' + wpSubscribersListI18n.unsubscribeAllButton + '</button>';
                     }
                     html += '</td>';
                     html += '</tr>';
@@ -463,9 +487,9 @@ class WP_Subscribers_List_Page {
                         if (response.success) {
                             $('#status-modal').fadeOut();
                             loadSubscribers();
-                            alert('Estado actualizado correctamente');
+                            alert(wpSubscribersListI18n.statusUpdated);
                         } else {
-                            alert('Error: ' + response.data.message);
+                            alert(wpSubscribersListI18n.error + ': ' + response.data.message);
                         }
                     }
                 });
@@ -476,11 +500,11 @@ class WP_Subscribers_List_Page {
                 let email = $(this).data('email');
                 let name = $(this).data('name');
 
-                let reason = prompt('¿Por qué razón ' + name + ' se desuscribe de TODOS los sitios?\n(Esta información se guardará en las notas)');
+                let reason = prompt(wpSubscribersListI18n.unsubscribePrompt.replace('%s', name));
 
                 if (reason === null) return; // Cancelado
 
-                if (confirm('¿Estás seguro de desuscribir a ' + name + ' (' + email + ') de TODOS los sitios de la red?\n\nEsta acción afectará a todos los sitios donde esté registrado.')) {
+                if (confirm(wpSubscribersListI18n.unsubscribeConfirm.replace('%s', name).replace('%s', email))) {
                     $.ajax({
                         url: ajaxurl,
                         type: 'POST',
@@ -493,9 +517,9 @@ class WP_Subscribers_List_Page {
                         success: function(response) {
                             if (response.success) {
                                 loadSubscribers();
-                                alert('Desuscrito exitosamente de ' + response.data.affected_rows + ' registro(s)');
+                                alert(wpSubscribersListI18n.unsubscribeSuccess.replace('%d', response.data.affected_rows));
                             } else {
-                                alert('Error: ' + response.data.message);
+                                alert(wpSubscribersListI18n.error + ': ' + response.data.message);
                             }
                         }
                     });

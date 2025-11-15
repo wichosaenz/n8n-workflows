@@ -1,0 +1,261 @@
+# English translation for WP Subscribers Manager
+# Copyright (C) 2024 Wicho Saenz
+# This file is distributed under the same license as the WP Subscribers Manager package.
+msgid ""
+msgstr ""
+"Project-Id-Version: WP Subscribers Manager 1.3.0\n"
+"Report-Msgid-Bugs-To: https://www.wichosaenz.com\n"
+"POT-Creation-Date: 2024-12-01 00:00+0000\n"
+"PO-Revision-Date: 2024-12-01 00:00+0000\n"
+"Last-Translator: Wicho Saenz <hello@wichosaenz.com>\n"
+"Language-Team: English\n"
+"Language: en_US\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Manual\n"
+
+#: wp-subscribers.php:150
+msgid "Suscríbete a nuestro boletín"
+msgstr "Subscribe to our newsletter"
+
+#: wp-subscribers.php:151
+msgid "Nombre"
+msgstr "Name"
+
+#: wp-subscribers.php:152
+msgid "Correo electrónico"
+msgstr "Email address"
+
+#: wp-subscribers.php:153
+msgid "Suscribirse"
+msgstr "Subscribe"
+
+#: wp-subscribers.php:154
+msgid "¡Gracias por suscribirte!"
+msgstr "Thank you for subscribing!"
+
+#: wp-subscribers.php:155
+msgid "Hubo un error. Por favor, intenta de nuevo."
+msgstr "An error occurred. Please try again."
+
+#: wp-subscribers.php:156
+msgid "Este correo ya está suscrito."
+msgstr "This email is already subscribed."
+
+#: includes/class-form-handler.php:27
+msgid "Sesión inválida. Por favor, recarga la página."
+msgstr "Invalid session. Please reload the page."
+
+#: includes/class-form-handler.php:38
+msgid "Por favor, completa todos los campos."
+msgstr "Please complete all fields."
+
+#: includes/class-form-handler.php:44
+msgid "Por favor, ingresa un correo electrónico válido."
+msgstr "Please enter a valid email address."
+
+#: includes/class-form-handler.php:63
+msgid "Este correo ya está suscrito. Si deseas, puedes desuscribirte de todos los sitios."
+msgstr "This email is already subscribed. If you wish, you can unsubscribe from all sites."
+
+#: includes/class-form-handler.php:101
+msgid "Por favor, proporciona un correo electrónico válido."
+msgstr "Please provide a valid email address."
+
+#: includes/class-form-handler.php:111
+msgid "Has sido desuscrito exitosamente de todos los sitios. ¡Esperamos verte de nuevo pronto!"
+msgstr "You have been successfully unsubscribed from all sites. We hope to see you again soon!"
+
+#: includes/class-form-handler.php:116
+msgid "Hubo un error al procesar tu desuscripción. Por favor, intenta de nuevo."
+msgstr "There was an error processing your unsubscription. Please try again."
+
+#: includes/class-form-handler.php:160
+msgid "¿Por qué deseas desuscribirte? (opcional)"
+msgstr "Why do you want to unsubscribe? (optional)"
+
+#: includes/class-form-handler.php:173
+msgid "Desuscribirme de Todos los Sitios"
+msgstr "Unsubscribe from All Sites"
+
+#: includes/class-form-handler.php:176
+msgid "Cancelar"
+msgstr "Cancel"
+
+#: admin/class-subscribers-list.php:28
+msgid "Lista de Suscriptores"
+msgstr "Subscribers List"
+
+#: admin/class-subscribers-list.php:29
+msgid "Ver Suscriptores"
+msgstr "View Subscribers"
+
+#: admin/class-subscribers-list.php:43
+msgid "Permisos insuficientes"
+msgstr "Insufficient permissions"
+
+#: admin/class-subscribers-list.php:63
+msgid "Error al obtener suscriptores"
+msgstr "Error fetching subscribers"
+
+#: admin/class-subscribers-list.php:82
+msgid "Email y estado son requeridos"
+msgstr "Email and status are required"
+
+#: admin/class-subscribers-list.php:109
+msgid "Email es requerido"
+msgstr "Email is required"
+
+#: admin/class-subscribers-list.php:132
+msgid "Cargando..."
+msgstr "Loading..."
+
+#: admin/class-subscribers-list.php:133
+msgid "Error al cargar suscriptores"
+msgstr "Error loading subscribers"
+
+#: admin/class-subscribers-list.php:134
+msgid "Error de conexión"
+msgstr "Connection error"
+
+#: admin/class-subscribers-list.php:135
+msgid "No hay suscriptores"
+msgstr "No subscribers"
+
+#: admin/class-subscribers-list.php:136
+msgid "Activo"
+msgstr "Active"
+
+#: admin/class-subscribers-list.php:137
+msgid "Inactivo"
+msgstr "Inactive"
+
+#: admin/class-subscribers-list.php:138
+msgid "Desuscrito"
+msgstr "Unsubscribed"
+
+#: admin/class-subscribers-list.php:139
+msgid "Rebotado"
+msgstr "Bounced"
+
+#: admin/class-subscribers-list.php:140
+msgid "Cambiar Estado"
+msgstr "Change Status"
+
+#: admin/class-subscribers-list.php:141
+msgid "Desuscribir de Todos"
+msgstr "Unsubscribe from All"
+
+#: admin/class-subscribers-list.php:142
+msgid "Estado actualizado correctamente"
+msgstr "Status updated successfully"
+
+#: admin/class-subscribers-list.php:143
+msgid "Error"
+msgstr "Error"
+
+#: admin/class-subscribers-list.php:144
+msgid "¿Por qué razón %s se desuscribe de TODOS los sitios?\\n(Esta información se guardará en las notas)"
+msgstr "Why is %s unsubscribing from ALL sites?\\n(This information will be saved in the notes)"
+
+#: admin/class-subscribers-list.php:145
+msgid "¿Estás seguro de desuscribir a %s (%s) de TODOS los sitios de la red?\\n\\nEsta acción afectará a todos los sitios donde esté registrado."
+msgstr "Are you sure you want to unsubscribe %s (%s) from ALL sites in the network?\\n\\nThis action will affect all sites where they are registered."
+
+#: admin/class-subscribers-list.php:146
+msgid "Desuscrito exitosamente de %d registro(s)"
+msgstr "Successfully unsubscribed from %d record(s)"
+
+#: admin/class-subscribers-list.php:147
+msgid "Total"
+msgstr "Total"
+
+#: admin/class-subscribers-list.php:148
+msgid "Activos"
+msgstr "Active"
+
+#: admin/class-subscribers-list.php:149
+msgid "Inactivos"
+msgstr "Inactive"
+
+#: admin/class-subscribers-list.php:150
+msgid "Desuscritos"
+msgstr "Unsubscribed"
+
+#: admin/class-subscribers-list.php:151
+msgid "Rebotados"
+msgstr "Bounced"
+
+#: admin/class-subscribers-list.php:163
+msgid "Solo este sitio"
+msgstr "This site only"
+
+#: admin/class-subscribers-list.php:168
+msgid "Todos los sitios de la red"
+msgstr "All network sites"
+
+#: admin/class-subscribers-list.php:170
+msgid "Aplicar Filtro"
+msgstr "Apply Filter"
+
+#: admin/class-subscribers-list.php:171
+msgid "Actualizar"
+msgstr "Refresh"
+
+#: admin/class-subscribers-list.php:179
+msgid "Email"
+msgstr "Email"
+
+#: admin/class-subscribers-list.php:181
+msgid "Estado"
+msgstr "Status"
+
+#: admin/class-subscribers-list.php:182
+msgid "Sitio Web"
+msgstr "Website"
+
+#: admin/class-subscribers-list.php:183
+msgid "Fecha"
+msgstr "Date"
+
+#: admin/class-subscribers-list.php:184
+msgid "Origen"
+msgstr "Source"
+
+#: admin/class-subscribers-list.php:185
+msgid "Acciones"
+msgstr "Actions"
+
+#: admin/class-subscribers-list.php:192
+msgid "Cargando suscriptores..."
+msgstr "Loading subscribers..."
+
+#: admin/class-subscribers-list.php:204
+msgid "Cambiar Estado del Suscriptor"
+msgstr "Change Subscriber Status"
+
+#: admin/class-subscribers-list.php:211
+msgid "Nuevo Estado:"
+msgstr "New Status:"
+
+#: admin/class-subscribers-list.php:221
+msgid "Notas (opcional):"
+msgstr "Notes (optional):"
+
+#: admin/class-subscribers-list.php:223
+msgid "Estas notas se agregarán al historial del suscriptor"
+msgstr "These notes will be added to the subscriber's history"
+
+#: admin/class-subscribers-list.php:227
+msgid "Actualizar Estado"
+msgstr "Update Status"
+
+#: admin/class-admin.php:24
+msgid "Suscriptores"
+msgstr "Subscribers"
+
+#: admin/class-admin.php:25
+msgid "Configuración"
+msgstr "Settings"
