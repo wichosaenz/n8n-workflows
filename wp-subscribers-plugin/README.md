@@ -2,7 +2,7 @@
 
 Plugin de WordPress para gestionar una lista de suscriptores con base de datos MySQL personalizada en Dreamhost.
 
-**Versión:** 1.3.0
+**Versión:** 1.3.1
 **Autor:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
 
@@ -24,12 +24,15 @@ WP Subscribers Manager es un plugin completo para WordPress que te permite crear
 ✅ Interfaz de administración intuitiva
 ✅ Envío de formulario con AJAX (sin recargar página)
 ✅ Responsive y compatible con dispositivos móviles
-✅ **NUEVO v1.3.0:** Lista completa de suscriptores con filtros por sitio
-✅ **NUEVO v1.3.0:** Estadísticas de suscriptores en tiempo real
-✅ **NUEVO v1.3.0:** Cambio de estado de suscriptores desde el admin
-✅ **NUEVO v1.3.0:** Desuscripción inteligente con detección automática
-✅ **NUEVO v1.3.0:** Sistema de desuscripción de toda la red con razones
-✅ **NUEVO v1.3.0:** Registro de notas con timestamp para auditoría
+✅ **NUEVO v1.3.1:** Internacionalización completa (i18n) con detección automática de idioma
+✅ **NUEVO v1.3.1:** Traducción al inglés incluida (en_US)
+✅ **NUEVO v1.3.1:** Archivos .pot, .po y .mo para traducciones personalizadas
+✅ v1.3.0: Lista completa de suscriptores con filtros por sitio
+✅ v1.3.0: Estadísticas de suscriptores en tiempo real
+✅ v1.3.0: Cambio de estado de suscriptores desde el admin
+✅ v1.3.0: Desuscripción inteligente con detección automática
+✅ v1.3.0: Sistema de desuscripción de toda la red con razones
+✅ v1.3.0: Registro de notas con timestamp para auditoría
 ✅ v1.2.0: Tracking automático de múltiples sitios web
 ✅ v1.2.0: Identificación del sitio de origen de cada suscriptor
 
@@ -108,6 +111,58 @@ Success: Thank you for subscribing!
 Error: An error occurred. Please try again.
 Duplicate: This email is already subscribed.
 ```
+
+---
+
+## 🌍 Internacionalización (i18n)
+
+El plugin **se adapta automáticamente al idioma de tu sitio WordPress** sin necesidad de configuración adicional.
+
+### Idiomas Soportados
+
+📌 **Español (es_ES)** - Idioma por defecto
+🇺🇸 **Inglés (en_US)** - Incluido desde v1.3.1
+
+### Cómo Funciona
+
+El plugin detecta el idioma configurado en WordPress (`Settings > General > Site Language`) y muestra automáticamente los textos en ese idioma.
+
+**Ejemplo:**
+- Si tu sitio está en inglés → El plugin se muestra en inglés
+- Si tu sitio está en español → El plugin se muestra en español
+
+### Archivos de Traducción
+
+Ubicación: `/languages/`
+
+| Archivo | Descripción |
+|---------|-------------|
+| `wp-subscribers.pot` | Plantilla para nuevas traducciones (usar con Poedit) |
+| `wp-subscribers-en_US.po` | Archivo de traducción al inglés (editable) |
+| `wp-subscribers-en_US.mo` | Archivo binario de traducción al inglés |
+
+### Agregar Nuevos Idiomas
+
+1. **Descarga Poedit** (https://poedit.net/)
+2. Abre el archivo `wp-subscribers.pot` con Poedit
+3. Crea una nueva traducción seleccionando tu idioma (ej: francés `fr_FR`)
+4. Traduce todas las strings
+5. Guarda el archivo - Poedit generará automáticamente:
+   - `wp-subscribers-fr_FR.po` (editable)
+   - `wp-subscribers-fr_FR.mo` (binario)
+6. Sube ambos archivos a `/wp-content/plugins/wp-subscribers-plugin/languages/`
+7. Cambia el idioma de WordPress a francés → ¡Listo!
+
+### Textos Traducibles
+
+El plugin traduce **todos los elementos**:
+- ✅ Formulario de suscripción (frontend)
+- ✅ Formulario de desuscripción (frontend)
+- ✅ Página de administración
+- ✅ Lista de suscriptores
+- ✅ Mensajes de éxito y error
+- ✅ Botones y etiquetas
+- ✅ Estadísticas y estados
 
 ---
 
@@ -517,7 +572,10 @@ wp-subscribers-plugin/
 │   ├── class-form-handler.php             # Procesamiento del formulario (con unsubscribe)
 │   ├── class-shortcode.php                # Shortcode
 │   └── class-widget.php                   # Widget
-├── languages/                              # Carpeta para traducciones
+├── languages/                              # Archivos de traducción (i18n)
+│   ├── wp-subscribers.pot                 # Plantilla de traducción
+│   ├── wp-subscribers-en_US.po            # Traducción al inglés (editable)
+│   └── wp-subscribers-en_US.mo            # Traducción al inglés (binario)
 ├── sql/                                    # Scripts SQL
 │   ├── 00-instalacion-rapida.sql          # Instalación rápida todo-en-uno
 │   ├── 01-crear-tabla-subscribers.sql     # Crear tabla principal
@@ -537,7 +595,7 @@ wp-subscribers-plugin/
 
 **Desarrollador:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
-**Versión:** 1.3.0
+**Versión:** 1.3.1
 
 ---
 
@@ -548,6 +606,17 @@ Este plugin está licenciado bajo GPL v2 o posterior.
 ---
 
 ## 🔄 Changelog
+
+### Versión 1.3.1 (2024) 🌍
+- 🆕 **Internacionalización completa (i18n)**: Detección automática del idioma de WordPress
+- 🆕 **Traducción al inglés (en_US)**: Incluida y lista para usar
+- 🆕 **Archivos .pot, .po y .mo**: Para traducciones personalizadas con Poedit
+- 🆕 **Frontend traducible**: Formulario de suscripción y desuscripción en múltiples idiomas
+- 🆕 **Backend traducible**: Panel de administración y lista de suscriptores en múltiples idiomas
+- 🆕 **JavaScript localizado**: Todos los mensajes dinámicos traducibles
+- 🆕 **Documentación i18n**: Guía completa para agregar nuevos idiomas
+- ⚡ **Mejoras en class-subscribers-list.php**: wp_localize_script() para traducciones JavaScript
+- 📚 **README actualizado**: Nueva sección de internacionalización con ejemplos
 
 ### Versión 1.3.0 (2024) 🎉
 - 🆕 **Lista completa de suscriptores**: Nueva página de administración que muestra todos los suscriptores con tabla interactiva
