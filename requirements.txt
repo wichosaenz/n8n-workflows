@@ -1,0 +1,57 @@
+# ============================================================
+# DEPENDENCIAS PYTHON PARA SCRIPTS DE CONFIGURACIÓN
+# ============================================================
+#
+# Instalación:
+#   pip install -r requirements.txt
+#
+# O con entorno virtual (recomendado):
+#   python -m venv venv
+#   source venv/bin/activate  # En Windows: venv\Scripts\activate
+#   pip install -r requirements.txt
+#
+# ============================================================
+
+# Core
+python-dotenv>=1.0.0
+
+# Pinecone
+pinecone-client>=3.0.0
+
+# Anthropic Claude
+anthropic>=0.18.0
+
+# OpenAI (para embeddings)
+openai>=1.12.0
+
+# Google Services
+google-auth>=2.27.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
+google-api-python-client>=2.115.0
+google-generativeai>=0.4.0
+
+# MySQL
+mysql-connector-python>=8.3.0
+
+# Utilidades
+requests>=2.31.0
+pandas>=2.2.0
+
+# Opcional: Para análisis y visualización
+# matplotlib>=3.8.0
+# seaborn>=0.13.0
+
+# ============================================================
+# NOTAS
+# ============================================================
+#
+# 1. Python 3.9+ requerido
+# 2. Las versiones son mínimas; se instalarán las más recientes compatibles
+# 3. Si usas otro proveedor de embeddings (Voyage, Cohere), añádelo aquí
+# 4. Para desarrollo, considera añadir:
+#    - pytest>=8.0.0
+#    - black>=24.0.0
+#    - flake8>=7.0.0
+#
+# ============================================================
