@@ -1,0 +1,113 @@
+{
+  "description": "Ejemplo de estructura de datos para Pinecone Index 'everest-bothers-01'",
+  "index_config": {
+    "name": "everest-bothers-01",
+    "dimension": 1536,
+    "metric": "cosine",
+    "pod_type": "p1.x1"
+  },
+  "metadata_schema": {
+    "titulo": "string - Título del artículo de investigación",
+    "autor": "string - Nombre del investigador/autor",
+    "grupo_investigador": "string - Uno de: 'Distribución Minorista', 'Industria de Transporte', 'Inversiones Chinas en México', 'Sector Autopartes'",
+    "fecha_publicacion": "string - Formato YYYY-MM-DD",
+    "contenido": "string - Texto completo del artículo (preferido)",
+    "resumen": "string - Resumen del artículo (alternativa a contenido)",
+    "keywords": "array[string] - Palabras clave (opcional)",
+    "doi": "string - DOI del paper (opcional)",
+    "url": "string - URL al artículo completo (opcional)",
+    "idioma": "string - 'es' o 'en' (opcional)"
+  },
+  "example_vectors": [
+    {
+      "id": "art-2025-10-001",
+      "values": "[array de 1536 floats - generado por tu modelo de embeddings]",
+      "metadata": {
+        "titulo": "Tendencias en la Distribución Minorista Post-Pandemia en América Latina",
+        "autor": "Dr. María González",
+        "grupo_investigador": "Distribución Minorista",
+        "fecha_publicacion": "2025-10-15",
+        "contenido": "El sector minorista en América Latina ha experimentado transformaciones significativas desde 2020. Este estudio analiza 500 establecimientos en México, Colombia y Chile, identificando tres tendencias principales: (1) digitalización acelerada del punto de venta, (2) implementación de sistemas omnicanal, y (3) optimización de la cadena de suministro mediante IA. Los resultados muestran que el 68% de los minoristas medianos han adoptado al menos una tecnología digital en los últimos 18 meses, con un incremento promedio del 23% en eficiencia operativa...",
+        "keywords": ["retail", "distribución", "omnicanalidad", "e-commerce", "América Latina"],
+        "idioma": "es",
+        "url": "https://journal.example.com/retail-2025-10"
+      }
+    },
+    {
+      "id": "art-2025-10-002",
+      "values": "[array de 1536 floats]",
+      "metadata": {
+        "titulo": "Electric Vehicle Adoption in Latin American Transport Industry: A Comparative Study",
+        "autor": "Dr. John Smith",
+        "grupo_investigador": "Industria de Transporte",
+        "fecha_publicacion": "2025-10-20",
+        "contenido": "This research examines the adoption rate of electric vehicles (EVs) in the commercial transport sector across five Latin American countries. Using data from 1,200 transport companies, we identify key barriers including: limited charging infrastructure (cited by 78% of respondents), high initial capital costs (65%), and range anxiety for long-haul routes (52%). However, early adopters report 40% reduction in operational costs over 3 years. Government incentives in Chile and Mexico show promising results with 15% YoY growth in EV fleet adoption...",
+        "keywords": ["electric vehicles", "transport", "logistics", "sustainability", "Latin America"],
+        "idioma": "en",
+        "doi": "10.1234/transport.2025.10.002"
+      }
+    },
+    {
+      "id": "art-2025-10-003",
+      "values": "[array de 1536 floats]",
+      "metadata": {
+        "titulo": "Inversión China en Infraestructura Mexicana: Análisis 2020-2025",
+        "autor": "Dr. Carlos Hernández",
+        "grupo_investigador": "Inversiones Chinas en México",
+        "fecha_publicacion": "2025-10-22",
+        "contenido": "Durante el quinquenio 2020-2025, la inversión china en proyectos de infraestructura en México ha alcanzado los $12.3 mil millones USD, concentrándose principalmente en tres sectores: energía renovable (45%), transporte ferroviario (30%), y telecomunicaciones (25%). Este análisis examina 47 proyectos activos, identificando patrones de inversión, impacto económico regional, y consideraciones geopolíticas. Los estados del norte de México han capturado el 62% de estas inversiones, correlacionado con la proximidad al mercado estadounidense y la existencia de corredores industriales establecidos...",
+        "keywords": ["China", "inversión extranjera", "infraestructura", "México", "geopolítica"],
+        "idioma": "es"
+      }
+    },
+    {
+      "id": "art-2025-10-004",
+      "values": "[array de 1536 floats]",
+      "metadata": {
+        "titulo": "Supply Chain Resilience in the Mexican Auto Parts Industry",
+        "autor": "Dr. Sarah Johnson",
+        "grupo_investigador": "Sector Autopartes",
+        "fecha_publicacion": "2025-10-25",
+        "contenido": "The Mexican auto parts industry, valued at $115 billion annually, faced unprecedented disruptions during 2020-2023. This study surveys 320 tier-1 and tier-2 suppliers to assess supply chain resilience strategies. Key findings include: 73% have diversified their supplier base geographically, 58% maintain strategic inventory reserves (up from 23% in 2019), and 45% have implemented predictive analytics for demand forecasting. The research also examines the impact of nearshoring trends, with 34% of respondents planning capacity expansion to serve relocated OEM production...",
+        "keywords": ["automotive", "supply chain", "resilience", "nearshoring", "Mexico"],
+        "idioma": "en",
+        "url": "https://automotive-research.example.com/2025/10/supply-chain"
+      }
+    },
+    {
+      "id": "art-2025-10-005",
+      "values": "[array de 1536 floats]",
+      "metadata": {
+        "titulo": "Impacto de la IA Generativa en el Retail: Casos de Uso en México",
+        "autor": "Dr. María González",
+        "grupo_investigador": "Distribución Minorista",
+        "fecha_publicacion": "2025-10-28",
+        "contenido": "La inteligencia artificial generativa está revolucionando la experiencia del cliente en el sector retail mexicano. Este estudio de caso múltiple analiza 25 implementaciones exitosas de IA generativa en grandes cadenas minoristas, identificando aplicaciones en: personalización de recomendaciones (84% de adopción), generación de contenido para marketing (67%), chatbots de atención al cliente (92%), y optimización de inventario predictivo (45%). Los resultados muestran un incremento promedio del 31% en conversión y una reducción del 24% en costos de atención al cliente. Sin embargo, se identifican desafíos en privacidad de datos y sesgo algorítmico...",
+        "keywords": ["IA generativa", "retail", "personalización", "customer experience", "México"],
+        "idioma": "es"
+      }
+    }
+  ],
+  "notes": {
+    "embedding_generation": "Usa el mismo modelo de embeddings que configuraste en n8n (ej: text-embedding-3-small de OpenAI, o Voyage AI)",
+    "upsert_example_python": "Ver archivo pinecone-upload-example.py para código de ejemplo",
+    "date_filtering": "El workflow filtra por 'fecha_publicacion' del mes anterior. Asegúrate de actualizar tus datos mensualmente.",
+    "content_length": "El campo 'contenido' debe tener al menos 200 palabras para que Claude genere un buen resumen.",
+    "metadata_size": "Pinecone tiene un límite de 40KB por metadata. Si tus artículos son muy largos, guarda solo el resumen."
+  },
+  "pinecone_upsert_format": {
+    "vectors": [
+      {
+        "id": "unique-article-id",
+        "values": [0.123, -0.456, 0.789, "... 1536 valores total"],
+        "metadata": {
+          "titulo": "Título del artículo",
+          "autor": "Nombre del autor",
+          "grupo_investigador": "Distribución Minorista",
+          "fecha_publicacion": "2025-10-15",
+          "contenido": "Texto completo o resumen..."
+        }
+      }
+    ]
+  }
+}
