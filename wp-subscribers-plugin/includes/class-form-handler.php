@@ -62,7 +62,7 @@ class WP_Subscribers_Form_Handler {
                     'email' => $email,
                     'name' => $name,
                     'status' => $existing_subscriber['status'],
-                    'message' => __('Este correo ya está suscrito. Si deseas, puedes desuscribirte de todos los sitios.', 'wp-subscribers')
+                    'message' => __('Este correo ya está suscrito. Si deseas, puedes darte de baja del newsletter.', 'wp-subscribers')
                 )
             ));
         }
@@ -128,12 +128,12 @@ class WP_Subscribers_Form_Handler {
 
         if ($result['success']) {
             wp_send_json_success(array(
-                'message' => __('Has sido desuscrito exitosamente de todos los sitios. ¡Esperamos verte de nuevo pronto!', 'wp-subscribers'),
+                'message' => __('Te has dado de baja exitosamente. Ya no recibirás el newsletter mensual. ¡Esperamos verte de nuevo pronto!', 'wp-subscribers'),
                 'affected_rows' => $result['affected_rows']
             ));
         } else {
             wp_send_json_error(array(
-                'message' => __('Hubo un error al procesar tu desuscripción. Por favor, intenta de nuevo.', 'wp-subscribers')
+                'message' => __('Hubo un error al procesar tu baja. Por favor, intenta de nuevo.', 'wp-subscribers')
             ));
         }
     }
@@ -209,26 +209,26 @@ class WP_Subscribers_Form_Handler {
             <!-- Formulario de desuscripción (oculto inicialmente) -->
             <div class="wp-subscribers-unsubscribe-form" style="display: none;">
                 <div class="wp-subscribers-unsubscribe-message">
-                    <p><strong>⚠️ Ya estás suscrito con este correo electrónico.</strong></p>
-                    <p>Si deseas desuscribirte, esto te eliminará de <strong>TODOS los sitios de nuestra red</strong> (aproximadamente 20 sitios web).</p>
+                    <p><strong>⚠️ <?php _e('Ya estás suscrito con este correo electrónico.', 'wp-subscribers'); ?></strong></p>
+                    <p><?php _e('Si te das de baja, dejarás de recibir el newsletter mensual y te eliminaremos de nuestra lista de suscriptores.', 'wp-subscribers'); ?></p>
                 </div>
 
                 <div class="wp-subscribers-field">
                     <label for="wp-subscribers-unsubscribe-reason">
-                        <?php _e('¿Por qué deseas desuscribirte? (opcional)', 'wp-subscribers'); ?>
+                        <?php _e('¿Por qué deseas darte de baja? (opcional)', 'wp-subscribers'); ?>
                     </label>
                     <textarea
                         id="wp-subscribers-unsubscribe-reason"
                         name="unsubscribe_reason"
                         class="wp-subscribers-textarea"
                         rows="4"
-                        placeholder="Por ejemplo: Recibo demasiados correos, ya no me interesa el contenido, etc."
+                        placeholder="<?php esc_attr_e('Por ejemplo: Recibo demasiados correos, ya no me interesa el contenido, etc.', 'wp-subscribers'); ?>"
                     ></textarea>
                 </div>
 
                 <div class="wp-subscribers-unsubscribe-actions">
                     <button type="button" class="wp-subscribers-button-danger wp-subscribers-unsubscribe-confirm">
-                        <?php _e('Desuscribirme de Todos los Sitios', 'wp-subscribers'); ?>
+                        <?php _e('Darme de Baja del Newsletter', 'wp-subscribers'); ?>
                     </button>
                     <button type="button" class="wp-subscribers-button-secondary wp-subscribers-unsubscribe-cancel">
                         <?php _e('Cancelar', 'wp-subscribers'); ?>

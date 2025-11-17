@@ -127,8 +127,13 @@ class WP_Subscribers_List_Page {
             return;
         }
 
+        // Encolar script de admin para asegurar que ajaxurl esté disponible
+        wp_enqueue_script('jquery');
+
         // Localizar strings para JavaScript
         wp_localize_script('jquery', 'wpSubscribersListI18n', array(
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('wp_subscribers_admin_nonce'),
             'loading' => __('Cargando...', 'wp-subscribers'),
             'loadError' => __('Error al cargar suscriptores', 'wp-subscribers'),
             'connectionError' => __('Error de conexión', 'wp-subscribers'),
@@ -138,12 +143,12 @@ class WP_Subscribers_List_Page {
             'statusUnsubscribed' => __('Desuscrito', 'wp-subscribers'),
             'statusBounced' => __('Rebotado', 'wp-subscribers'),
             'changeStatusButton' => __('Cambiar Estado', 'wp-subscribers'),
-            'unsubscribeAllButton' => __('Desuscribir de Todos', 'wp-subscribers'),
+            'unsubscribeAllButton' => __('Desuscribir', 'wp-subscribers'),
             'statusUpdated' => __('Estado actualizado correctamente', 'wp-subscribers'),
             'error' => __('Error', 'wp-subscribers'),
-            'unsubscribePrompt' => __('¿Por qué razón %s se desuscribe de TODOS los sitios?\n(Esta información se guardará en las notas)', 'wp-subscribers'),
-            'unsubscribeConfirm' => __('¿Estás seguro de desuscribir a %s (%s) de TODOS los sitios de la red?\n\nEsta acción afectará a todos los sitios donde esté registrado.', 'wp-subscribers'),
-            'unsubscribeSuccess' => __('Desuscrito exitosamente de %d registro(s)', 'wp-subscribers'),
+            'unsubscribePrompt' => __('¿Por qué razón %s desea darse de baja?\n(Esta información se guardará en las notas)', 'wp-subscribers'),
+            'unsubscribeConfirm' => __('¿Estás seguro de dar de baja a %s (%s)?\n\nEsta persona dejará de recibir el newsletter mensual.', 'wp-subscribers'),
+            'unsubscribeSuccess' => __('Dado de baja exitosamente', 'wp-subscribers'),
             'total' => __('Total', 'wp-subscribers'),
             'active' => __('Activos', 'wp-subscribers'),
             'inactive' => __('Inactivos', 'wp-subscribers'),
@@ -361,12 +366,12 @@ class WP_Subscribers_List_Page {
                 $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 40px;"><span class="spinner is-active" style="float: none; margin: 0;"></span><p>' + wpSubscribersListI18n.loading + '</p></td></tr>');
 
                 $.ajax({
-                    url: ajaxurl,
+                    url: wpSubscribersListI18n.ajaxUrl,
                     type: 'POST',
                     data: {
                         action: 'wp_subscribers_get_list',
                         filter: currentFilter,
-                        nonce: '<?php echo wp_create_nonce('wp_subscribers_admin_nonce'); ?>'
+                        nonce: wpSubscribersListI18n.nonce
                     },
                     success: function(response) {
                         if (response.success) {
@@ -474,14 +479,14 @@ class WP_Subscribers_List_Page {
                 let notes = $('#modal-notes').val();
 
                 $.ajax({
-                    url: ajaxurl,
+                    url: wpSubscribersListI18n.ajaxUrl,
                     type: 'POST',
                     data: {
                         action: 'wp_subscribers_update_status',
                         email: email,
                         status: status,
                         notes: notes,
-                        nonce: '<?php echo wp_create_nonce('wp_subscribers_admin_nonce'); ?>'
+                        nonce: wpSubscribersListI18n.nonce
                     },
                     success: function(response) {
                         if (response.success) {
@@ -506,13 +511,13 @@ class WP_Subscribers_List_Page {
 
                 if (confirm(wpSubscribersListI18n.unsubscribeConfirm.replace('%s', name).replace('%s', email))) {
                     $.ajax({
-                        url: ajaxurl,
+                        url: wpSubscribersListI18n.ajaxUrl,
                         type: 'POST',
                         data: {
                             action: 'wp_subscribers_unsubscribe_all',
                             email: email,
                             reason: reason,
-                            nonce: '<?php echo wp_create_nonce('wp_subscribers_admin_nonce'); ?>'
+                            nonce: wpSubscribersListI18n.nonce
                         },
                         success: function(response) {
                             if (response.success) {

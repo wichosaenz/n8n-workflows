@@ -130,7 +130,7 @@
             var buttonText = $button.text();
 
             // Confirmar acción
-            if (!confirm('⚠️ ADVERTENCIA: Esto te desuscribirá de TODOS los sitios de nuestra red (aproximadamente 20 sitios web).\n\n¿Estás seguro de que deseas continuar?')) {
+            if (!confirm('⚠️ ADVERTENCIA: Te darás de baja del newsletter mensual y te eliminaremos de nuestra lista de suscriptores.\n\n¿Estás seguro de que deseas continuar?')) {
                 return;
             }
 
