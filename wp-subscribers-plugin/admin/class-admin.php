@@ -16,6 +16,7 @@ class WP_Subscribers_Admin {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
         add_action('wp_ajax_wp_subscribers_test_connection', array($this, 'test_connection'));
+        add_action('wp_ajax_wp_subscribers_test_email', array($this, 'test_email'));
     }
 
     /**
@@ -66,6 +67,19 @@ class WP_Subscribers_Admin {
             'duplicate_message' => isset($input['labels']['duplicate_message']) ? sanitize_text_field($input['labels']['duplicate_message']) : ''
         );
 
+        // Sanitizar configuración SMTP
+        $sanitized['smtp_host'] = isset($input['smtp_host']) ? sanitize_text_field($input['smtp_host']) : '';
+        $sanitized['smtp_port'] = isset($input['smtp_port']) ? absint($input['smtp_port']) : 587;
+        $sanitized['smtp_security'] = isset($input['smtp_security']) ? sanitize_text_field($input['smtp_security']) : 'tls';
+        $sanitized['smtp_user'] = isset($input['smtp_user']) ? sanitize_email($input['smtp_user']) : '';
+        $sanitized['smtp_password'] = isset($input['smtp_password']) ? $input['smtp_password'] : '';
+        $sanitized['smtp_from_name'] = isset($input['smtp_from_name']) ? sanitize_text_field($input['smtp_from_name']) : get_bloginfo('name');
+
+        // Sanitizar configuración de notificaciones
+        $sanitized['email_notifications_enabled'] = isset($input['email_notifications_enabled']) ? 'yes' : 'no';
+        $sanitized['notification_recipients'] = isset($input['notification_recipients']) ? sanitize_textarea_field($input['notification_recipients']) : '';
+        $sanitized['email_subject'] = isset($input['email_subject']) ? sanitize_text_field($input['email_subject']) : '🎉 Nueva suscripción en ' . get_bloginfo('name');
+
         return $sanitized;
     }
 
@@ -84,6 +98,37 @@ class WP_Subscribers_Admin {
 
         $db = new WP_Subscribers_Database();
         $result = $db->test_connection();
+
+        if ($result['success']) {
+            wp_send_json_success($result);
+        } else {
+            wp_send_json_error($result);
+        }
+    }
+
+    /**
+     * Enviar email de prueba
+     */
+    public function test_email() {
+        check_ajax_referer('wp_subscribers_admin_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array(
+                'message' => 'Permisos insuficientes'
+            ));
+        }
+
+        $test_recipient = isset($_POST['test_email']) ? sanitize_email($_POST['test_email']) : '';
+
+        if (empty($test_recipient) || !is_email($test_recipient)) {
+            wp_send_json_error(array(
+                'message' => 'Email de prueba inválido'
+            ));
+        }
+
+        require_once WP_SUBSCRIBERS_PLUGIN_DIR . 'includes/class-email-notifications.php';
+        $email_notifications = new WP_Subscribers_Email_Notifications();
+        $result = $email_notifications->send_test_email($test_recipient);
 
         if ($result['success']) {
             wp_send_json_success($result);
@@ -118,7 +163,18 @@ class WP_Subscribers_Admin {
                     'success_message' => sanitize_text_field($_POST['labels']['success_message']),
                     'error_message' => sanitize_text_field($_POST['labels']['error_message']),
                     'duplicate_message' => sanitize_text_field($_POST['labels']['duplicate_message'])
-                )
+                ),
+                // Configuración SMTP
+                'smtp_host' => isset($_POST['smtp_host']) ? sanitize_text_field($_POST['smtp_host']) : '',
+                'smtp_port' => isset($_POST['smtp_port']) ? absint($_POST['smtp_port']) : 587,
+                'smtp_security' => isset($_POST['smtp_security']) ? sanitize_text_field($_POST['smtp_security']) : 'tls',
+                'smtp_user' => isset($_POST['smtp_user']) ? sanitize_email($_POST['smtp_user']) : '',
+                'smtp_password' => isset($_POST['smtp_password']) ? $_POST['smtp_password'] : '',
+                'smtp_from_name' => isset($_POST['smtp_from_name']) ? sanitize_text_field($_POST['smtp_from_name']) : get_bloginfo('name'),
+                // Configuración de notificaciones
+                'email_notifications_enabled' => isset($_POST['email_notifications_enabled']) ? 'yes' : 'no',
+                'notification_recipients' => isset($_POST['notification_recipients']) ? sanitize_textarea_field($_POST['notification_recipients']) : '',
+                'email_subject' => isset($_POST['email_subject']) ? sanitize_text_field($_POST['email_subject']) : '🎉 Nueva suscripción en ' . get_bloginfo('name')
             );
 
             update_option('wp_subscribers_settings', $settings);
@@ -340,6 +396,194 @@ class WP_Subscribers_Admin {
                         </table>
                     </div>
 
+                    <!-- Configuración SMTP -->
+                    <div class="wp-subscribers-section">
+                        <h2><?php _e('Configuración SMTP (para notificaciones por email)', 'wp-subscribers'); ?> 📧</h2>
+                        <p class="description">
+                            <?php _e('Configura los parámetros de tu servidor SMTP para enviar notificaciones cuando haya nuevas suscripciones.', 'wp-subscribers'); ?>
+                        </p>
+
+                        <table class="form-table">
+                            <tr>
+                                <th scope="row">
+                                    <label for="smtp_host"><?php _e('Servidor SMTP', 'wp-subscribers'); ?></label>
+                                </th>
+                                <td>
+                                    <input
+                                        type="text"
+                                        id="smtp_host"
+                                        name="smtp_host"
+                                        value="<?php echo esc_attr(isset($settings['smtp_host']) ? $settings['smtp_host'] : ''); ?>"
+                                        class="regular-text"
+                                        placeholder="smtp.gmail.com"
+                                    />
+                                    <p class="description">
+                                        <?php _e('Ejemplo: smtp.gmail.com, smtp.dreamhost.com, smtp.office365.com', 'wp-subscribers'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="smtp_port"><?php _e('Puerto SMTP', 'wp-subscribers'); ?></label>
+                                </th>
+                                <td>
+                                    <input
+                                        type="number"
+                                        id="smtp_port"
+                                        name="smtp_port"
+                                        value="<?php echo esc_attr(isset($settings['smtp_port']) ? $settings['smtp_port'] : '587'); ?>"
+                                        class="small-text"
+                                    />
+                                    <p class="description">
+                                        <?php _e('Puerto común: 587 (TLS) o 465 (SSL)', 'wp-subscribers'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="smtp_security"><?php _e('Seguridad/Encriptación', 'wp-subscribers'); ?></label>
+                                </th>
+                                <td>
+                                    <select id="smtp_security" name="smtp_security">
+                                        <option value="tls" <?php selected(isset($settings['smtp_security']) ? $settings['smtp_security'] : 'tls', 'tls'); ?>>TLS</option>
+                                        <option value="ssl" <?php selected(isset($settings['smtp_security']) ? $settings['smtp_security'] : 'tls', 'ssl'); ?>>SSL</option>
+                                        <option value="" <?php selected(isset($settings['smtp_security']) ? $settings['smtp_security'] : 'tls', ''); ?>><?php _e('Sin encriptación', 'wp-subscribers'); ?></option>
+                                    </select>
+                                    <p class="description">
+                                        <?php _e('Recomendado: TLS (puerto 587)', 'wp-subscribers'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="smtp_user"><?php _e('Usuario / Email SMTP', 'wp-subscribers'); ?></label>
+                                </th>
+                                <td>
+                                    <input
+                                        type="email"
+                                        id="smtp_user"
+                                        name="smtp_user"
+                                        value="<?php echo esc_attr(isset($settings['smtp_user']) ? $settings['smtp_user'] : ''); ?>"
+                                        class="regular-text"
+                                        placeholder="tu-email@ejemplo.com"
+                                    />
+                                    <p class="description">
+                                        <?php _e('Tu email completo (será el remitente de las notificaciones)', 'wp-subscribers'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="smtp_password"><?php _e('Contraseña SMTP', 'wp-subscribers'); ?></label>
+                                </th>
+                                <td>
+                                    <input
+                                        type="password"
+                                        id="smtp_password"
+                                        name="smtp_password"
+                                        value="<?php echo esc_attr(isset($settings['smtp_password']) ? $settings['smtp_password'] : ''); ?>"
+                                        class="regular-text"
+                                        autocomplete="new-password"
+                                    />
+                                    <p class="description">
+                                        <?php _e('Contraseña de tu cuenta de email o contraseña de aplicación', 'wp-subscribers'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="smtp_from_name"><?php _e('Nombre del Remitente', 'wp-subscribers'); ?></label>
+                                </th>
+                                <td>
+                                    <input
+                                        type="text"
+                                        id="smtp_from_name"
+                                        name="smtp_from_name"
+                                        value="<?php echo esc_attr(isset($settings['smtp_from_name']) ? $settings['smtp_from_name'] : get_bloginfo('name')); ?>"
+                                        class="regular-text"
+                                        placeholder="<?php echo esc_attr(get_bloginfo('name')); ?>"
+                                    />
+                                    <p class="description">
+                                        <?php _e('Nombre que aparecerá como remitente de los emails', 'wp-subscribers'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p>
+                            <input type="email" id="test-email-address" placeholder="tu-email@ejemplo.com" class="regular-text" style="margin-right: 10px;" />
+                            <button type="button" id="test-email" class="button button-secondary">
+                                <?php _e('Enviar Email de Prueba', 'wp-subscribers'); ?>
+                            </button>
+                            <span id="email-status"></span>
+                        </p>
+                    </div>
+
+                    <!-- Configuración de Notificaciones -->
+                    <div class="wp-subscribers-section">
+                        <h2><?php _e('Configuración de Notificaciones por Email', 'wp-subscribers'); ?> 🔔</h2>
+                        <p class="description">
+                            <?php _e('Configura quién recibirá notificaciones cuando haya nuevas suscripciones.', 'wp-subscribers'); ?>
+                        </p>
+
+                        <table class="form-table">
+                            <tr>
+                                <th scope="row">
+                                    <label for="email_notifications_enabled"><?php _e('Activar Notificaciones', 'wp-subscribers'); ?></label>
+                                </th>
+                                <td>
+                                    <label>
+                                        <input
+                                            type="checkbox"
+                                            id="email_notifications_enabled"
+                                            name="email_notifications_enabled"
+                                            value="yes"
+                                            <?php checked(isset($settings['email_notifications_enabled']) ? $settings['email_notifications_enabled'] : 'no', 'yes'); ?>
+                                        />
+                                        <?php _e('Enviar email cada vez que alguien se suscriba', 'wp-subscribers'); ?>
+                                    </label>
+                                    <p class="description">
+                                        <?php _e('Marca esta casilla para recibir notificaciones automáticas', 'wp-subscribers'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="notification_recipients"><?php _e('Destinatarios de Notificaciones', 'wp-subscribers'); ?></label>
+                                </th>
+                                <td>
+                                    <textarea
+                                        id="notification_recipients"
+                                        name="notification_recipients"
+                                        rows="3"
+                                        class="large-text"
+                                        placeholder="admin@ejemplo.com, ventas@ejemplo.com, marketing@ejemplo.com"
+                                    ><?php echo esc_textarea(isset($settings['notification_recipients']) ? $settings['notification_recipients'] : ''); ?></textarea>
+                                    <p class="description">
+                                        <?php _e('Emails separados por comas que recibirán las notificaciones de nuevas suscripciones', 'wp-subscribers'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="email_subject"><?php _e('Asunto del Email', 'wp-subscribers'); ?></label>
+                                </th>
+                                <td>
+                                    <input
+                                        type="text"
+                                        id="email_subject"
+                                        name="email_subject"
+                                        value="<?php echo esc_attr(isset($settings['email_subject']) ? $settings['email_subject'] : '🎉 Nueva suscripción en ' . get_bloginfo('name')); ?>"
+                                        class="large-text"
+                                    />
+                                    <p class="description">
+                                        <?php _e('Asunto que aparecerá en los emails de notificación', 'wp-subscribers'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
                     <!-- Instrucciones de Uso -->
                     <div class="wp-subscribers-section">
                         <h2><?php _e('Cómo Usar el Plugin', 'wp-subscribers'); ?></h2>
@@ -438,6 +682,57 @@ status (VARCHAR 20, default: 'active')
                         },
                         complete: function() {
                             button.prop('disabled', false).text('<?php _e('Probar Conexión', 'wp-subscribers'); ?>');
+                        }
+                    });
+                });
+
+                // Test Email
+                $('#test-email').on('click', function() {
+                    var button = $(this);
+                    var status = $('#email-status');
+                    var testEmail = $('#test-email-address').val();
+
+                    if (!testEmail) {
+                        alert('<?php _e('Por favor ingresa un email de prueba', 'wp-subscribers'); ?>');
+                        return;
+                    }
+
+                    button.prop('disabled', true).text('<?php _e('Enviando...', 'wp-subscribers'); ?>');
+                    status.html('');
+
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'wp_subscribers_test_email',
+                            test_email: testEmail,
+                            nonce: '<?php echo wp_create_nonce('wp_subscribers_admin_nonce'); ?>'
+                        },
+                        success: function(response) {
+                            var html = '';
+
+                            if (response.success) {
+                                html = '<div style="padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; margin-top: 10px;">';
+                                html += '<span style="color: #155724; font-weight: bold;">✓ ' + (response.data.message || 'Email enviado correctamente') + '</span>';
+                                html += '<p style="margin: 5px 0 0 0; color: #155724; font-size: 13px;">Revisa la bandeja de entrada de <strong>' + testEmail + '</strong></p>';
+                                html += '</div>';
+                            } else {
+                                html = '<div style="padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; margin-top: 10px;">';
+                                html += '<span style="color: #721c24;">✗ ' + (response.data.message || 'Error al enviar email') + '</span>';
+                                html += '<p style="margin: 5px 0 0 0; color: #721c24; font-size: 12px;">Verifica la configuración SMTP e intenta nuevamente</p>';
+                                html += '</div>';
+                            }
+
+                            status.html(html);
+                        },
+                        error: function() {
+                            var html = '<div style="padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; margin-top: 10px;">';
+                            html += '<span style="color: #721c24;">✗ <?php _e('Error al procesar la solicitud', 'wp-subscribers'); ?></span>';
+                            html += '</div>';
+                            status.html(html);
+                        },
+                        complete: function() {
+                            button.prop('disabled', false).text('<?php _e('Enviar Email de Prueba', 'wp-subscribers'); ?>');
                         }
                     });
                 });
