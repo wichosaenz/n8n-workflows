@@ -127,137 +127,132 @@ class WP_Subscribers_List_Page {
             return;
         }
 
-        // Encolar script de admin para asegurar que ajaxurl esté disponible
-        wp_enqueue_script('jquery');
-
-        // Localizar strings para JavaScript
-        wp_localize_script('jquery', 'wpSubscribersListI18n', array(
-            'ajaxUrl' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('wp_subscribers_admin_nonce'),
-            'loading' => __('Cargando...', 'wp-subscribers'),
-            'loadError' => __('Error al cargar suscriptores', 'wp-subscribers'),
-            'connectionError' => __('Error de conexión', 'wp-subscribers'),
-            'noSubscribers' => __('No hay suscriptores', 'wp-subscribers'),
-            'statusActive' => __('Activo', 'wp-subscribers'),
-            'statusInactive' => __('Inactivo', 'wp-subscribers'),
-            'statusUnsubscribed' => __('Desuscrito', 'wp-subscribers'),
-            'statusBounced' => __('Rebotado', 'wp-subscribers'),
-            'changeStatusButton' => __('Cambiar Estado', 'wp-subscribers'),
-            'unsubscribeAllButton' => __('Desuscribir', 'wp-subscribers'),
-            'statusUpdated' => __('Estado actualizado correctamente', 'wp-subscribers'),
-            'error' => __('Error', 'wp-subscribers'),
-            'unsubscribePrompt' => __('¿Por qué razón %s desea darse de baja?\n(Esta información se guardará en las notas)', 'wp-subscribers'),
-            'unsubscribeConfirm' => __('¿Estás seguro de dar de baja a %s (%s)?\n\nEsta persona dejará de recibir el newsletter mensual.', 'wp-subscribers'),
-            'unsubscribeSuccess' => __('Dado de baja exitosamente', 'wp-subscribers'),
-            'total' => __('Total', 'wp-subscribers'),
-            'active' => __('Activos', 'wp-subscribers'),
-            'inactive' => __('Inactivos', 'wp-subscribers'),
-            'unsubscribed' => __('Desuscritos', 'wp-subscribers'),
-            'bounced' => __('Rebotados', 'wp-subscribers')
-        ));
-
+        // Obtener filtro actual
+        $filter = isset($_GET['filter']) ? sanitize_text_field($_GET['filter']) : 'current_site';
         $current_site_url = esc_url(home_url());
+
+        // Cargar datos directamente en PHP
+        $db = new WP_Subscribers_Database();
+        $website_url = ($filter === 'current_site') ? $current_site_url : null;
+        $result = $db->get_subscribers($filter, $website_url, 500, 0);
+        $stats = $db->get_statistics($website_url);
+
+        $subscribers = $result['success'] ? $result['data'] : array();
+        $total = $result['total'];
+        $has_connection = $db->get_connection() !== false;
         ?>
         <div class="wrap">
             <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
 
-            <!-- Estadísticas -->
-            <div id="subscribers-stats" class="wp-subscribers-stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value" id="stat-total">-</div>
-                    <div class="stat-label"><?php _e('Total', 'wp-subscribers'); ?></div>
+            <?php if (!$has_connection): ?>
+                <div class="notice notice-error">
+                    <p><strong><?php _e('Error de conexión a la base de datos', 'wp-subscribers'); ?></strong></p>
+                    <p><?php _e('No se pudo conectar a la base de datos. Por favor verifica tu configuración.', 'wp-subscribers'); ?></p>
+                    <p><a href="<?php echo admin_url('admin.php?page=wp-subscribers'); ?>" class="button"><?php _e('Ir a Configuración', 'wp-subscribers'); ?></a></p>
                 </div>
-                <div class="stat-card stat-active">
-                    <div class="stat-value" id="stat-active">-</div>
-                    <div class="stat-label"><?php _e('Activos', 'wp-subscribers'); ?></div>
+            <?php else: ?>
+
+                <!-- Estadísticas -->
+                <div class="wp-subscribers-stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value"><?php echo esc_html($stats['total'] ?? 0); ?></div>
+                        <div class="stat-label"><?php _e('Total', 'wp-subscribers'); ?></div>
+                    </div>
+                    <div class="stat-card stat-active">
+                        <div class="stat-value"><?php echo esc_html($stats['active'] ?? 0); ?></div>
+                        <div class="stat-label"><?php _e('Activos', 'wp-subscribers'); ?></div>
+                    </div>
+                    <div class="stat-card stat-inactive">
+                        <div class="stat-value"><?php echo esc_html($stats['inactive'] ?? 0); ?></div>
+                        <div class="stat-label"><?php _e('Inactivos', 'wp-subscribers'); ?></div>
+                    </div>
+                    <div class="stat-card stat-unsubscribed">
+                        <div class="stat-value"><?php echo esc_html($stats['unsubscribed'] ?? 0); ?></div>
+                        <div class="stat-label"><?php _e('Desuscritos', 'wp-subscribers'); ?></div>
+                    </div>
+                    <div class="stat-card stat-bounced">
+                        <div class="stat-value"><?php echo esc_html($stats['bounced'] ?? 0); ?></div>
+                        <div class="stat-label"><?php _e('Rebotados', 'wp-subscribers'); ?></div>
+                    </div>
                 </div>
-                <div class="stat-card stat-inactive">
-                    <div class="stat-value" id="stat-inactive">-</div>
-                    <div class="stat-label"><?php _e('Inactivos', 'wp-subscribers'); ?></div>
+
+                <!-- Filtros -->
+                <div class="wp-subscribers-filters">
+                    <form method="get" action="">
+                        <input type="hidden" name="page" value="wp-subscribers-list">
+                        <label>
+                            <input type="radio" name="filter" value="current_site" <?php checked($filter, 'current_site'); ?>>
+                            <?php _e('Solo este sitio', 'wp-subscribers'); ?>
+                            <code><?php echo esc_html($current_site_url); ?></code>
+                        </label>
+                        <label>
+                            <input type="radio" name="filter" value="all" <?php checked($filter, 'all'); ?>>
+                            <?php _e('Todos los sitios de la red', 'wp-subscribers'); ?>
+                        </label>
+                        <button type="submit" class="button"><?php _e('Aplicar Filtro', 'wp-subscribers'); ?></button>
+                    </form>
                 </div>
-                <div class="stat-card stat-unsubscribed">
-                    <div class="stat-value" id="stat-unsubscribed">-</div>
-                    <div class="stat-label"><?php _e('Desuscritos', 'wp-subscribers'); ?></div>
+
+                <!-- Tabla de suscriptores -->
+                <div class="wp-subscribers-table-container">
+                    <table class="wp-list-table widefat fixed striped">
+                        <thead>
+                            <tr>
+                                <th><?php _e('Nombre', 'wp-subscribers'); ?></th>
+                                <th><?php _e('Email', 'wp-subscribers'); ?></th>
+                                <th><?php _e('Estado', 'wp-subscribers'); ?></th>
+                                <th><?php _e('Sitio Web', 'wp-subscribers'); ?></th>
+                                <th><?php _e('Fecha', 'wp-subscribers'); ?></th>
+                                <th><?php _e('Origen', 'wp-subscribers'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($subscribers)): ?>
+                                <tr>
+                                    <td colspan="6" style="text-align: center; padding: 40px;">
+                                        <?php _e('No hay suscriptores', 'wp-subscribers'); ?>
+                                    </td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($subscribers as $subscriber): ?>
+                                    <tr>
+                                        <td><strong><?php echo esc_html($subscriber['name']); ?></strong></td>
+                                        <td><?php echo esc_html($subscriber['email']); ?></td>
+                                        <td>
+                                            <?php
+                                            $status_class = 'status-' . $subscriber['status'];
+                                            $status_labels = array(
+                                                'active' => __('Activo', 'wp-subscribers'),
+                                                'inactive' => __('Inactivo', 'wp-subscribers'),
+                                                'unsubscribed' => __('Desuscrito', 'wp-subscribers'),
+                                                'bounced' => __('Rebotado', 'wp-subscribers')
+                                            );
+                                            $status_text = $status_labels[$subscriber['status']] ?? $subscriber['status'];
+                                            ?>
+                                            <span class="status-badge <?php echo esc_attr($status_class); ?>">
+                                                <?php echo esc_html($status_text); ?>
+                                            </span>
+                                        </td>
+                                        <td><small><?php echo esc_html($subscriber['website_url'] ?? '-'); ?></small></td>
+                                        <td><?php echo esc_html(mysql2date('j M Y', $subscriber['subscribed_date'])); ?></td>
+                                        <td><?php echo esc_html($subscriber['source'] ?? '-'); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+
+                    <?php if ($total > 0): ?>
+                        <p class="description" style="margin-top: 15px;">
+                            <?php printf(__('Mostrando %d suscriptores', 'wp-subscribers'), count($subscribers)); ?>
+                            <?php if ($total > count($subscribers)): ?>
+                                <?php printf(__('de %d totales', 'wp-subscribers'), $total); ?>
+                            <?php endif; ?>
+                        </p>
+                    <?php endif; ?>
                 </div>
-                <div class="stat-card stat-bounced">
-                    <div class="stat-value" id="stat-bounced">-</div>
-                    <div class="stat-label"><?php _e('Rebotados', 'wp-subscribers'); ?></div>
-                </div>
-            </div>
 
-            <!-- Filtros -->
-            <div class="wp-subscribers-filters">
-                <label>
-                    <input type="radio" name="subscriber_filter" value="current_site" checked>
-                    <?php _e('Solo este sitio', 'wp-subscribers'); ?>
-                    <code id="current-site-url"><?php echo esc_html($current_site_url); ?></code>
-                </label>
-                <label>
-                    <input type="radio" name="subscriber_filter" value="all">
-                    <?php _e('Todos los sitios de la red', 'wp-subscribers'); ?>
-                </label>
-                <button type="button" id="apply-filter" class="button"><?php _e('Aplicar Filtro', 'wp-subscribers'); ?></button>
-                <button type="button" id="refresh-list" class="button"><?php _e('Actualizar', 'wp-subscribers'); ?></button>
-            </div>
-
-            <!-- Tabla de suscriptores -->
-            <div class="wp-subscribers-table-container">
-                <table class="wp-list-table widefat fixed striped">
-                    <thead>
-                        <tr>
-                            <th><?php _e('Nombre', 'wp-subscribers'); ?></th>
-                            <th><?php _e('Email', 'wp-subscribers'); ?></th>
-                            <th><?php _e('Estado', 'wp-subscribers'); ?></th>
-                            <th><?php _e('Sitio Web', 'wp-subscribers'); ?></th>
-                            <th><?php _e('Fecha', 'wp-subscribers'); ?></th>
-                            <th><?php _e('Origen', 'wp-subscribers'); ?></th>
-                            <th><?php _e('Acciones', 'wp-subscribers'); ?></th>
-                        </tr>
-                    </thead>
-                    <tbody id="subscribers-table-body">
-                        <tr>
-                            <td colspan="7" style="text-align: center; padding: 40px;">
-                                <span class="spinner is-active" style="float: none; margin: 0;"></span>
-                                <p><?php _e('Cargando suscriptores...', 'wp-subscribers'); ?></p>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Modal para cambiar estado -->
-        <div id="status-modal" class="wp-subscribers-modal" style="display: none;">
-            <div class="wp-subscribers-modal-content">
-                <span class="wp-subscribers-modal-close">&times;</span>
-                <h2><?php _e('Cambiar Estado del Suscriptor', 'wp-subscribers'); ?></h2>
-                <form id="status-form">
-                    <input type="hidden" id="modal-email" name="email">
-
-                    <p><strong id="modal-subscriber-name"></strong> (<span id="modal-subscriber-email"></span>)</p>
-
-                    <p>
-                        <label for="modal-status"><?php _e('Nuevo Estado:', 'wp-subscribers'); ?></label>
-                        <select id="modal-status" name="status" required>
-                            <option value="active"><?php _e('Activo', 'wp-subscribers'); ?></option>
-                            <option value="inactive"><?php _e('Inactivo', 'wp-subscribers'); ?></option>
-                            <option value="unsubscribed"><?php _e('Desuscrito', 'wp-subscribers'); ?></option>
-                            <option value="bounced"><?php _e('Rebotado', 'wp-subscribers'); ?></option>
-                        </select>
-                    </p>
-
-                    <p>
-                        <label for="modal-notes"><?php _e('Notas (opcional):', 'wp-subscribers'); ?></label>
-                        <textarea id="modal-notes" name="notes" rows="3" style="width: 100%;"></textarea>
-                        <small><?php _e('Estas notas se agregarán al historial del suscriptor', 'wp-subscribers'); ?></small>
-                    </p>
-
-                    <p class="submit">
-                        <button type="submit" class="button button-primary"><?php _e('Actualizar Estado', 'wp-subscribers'); ?></button>
-                        <button type="button" class="button modal-cancel"><?php _e('Cancelar', 'wp-subscribers'); ?></button>
-                    </p>
-                </form>
-            </div>
+            <?php endif; ?>
         </div>
 
         <style>
@@ -320,221 +315,7 @@ class WP_Subscribers_List_Page {
         .status-inactive { background: #fff3cd; color: #856404; }
         .status-unsubscribed { background: #f8d7da; color: #721c24; }
         .status-bounced { background: #e2d9f3; color: #4a148c; }
-        .wp-subscribers-modal {
-            display: none;
-            position: fixed;
-            z-index: 100000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.4);
-        }
-        .wp-subscribers-modal-content {
-            background-color: #fefefe;
-            margin: 5% auto;
-            padding: 30px;
-            border: 1px solid #888;
-            border-radius: 4px;
-            width: 80%;
-            max-width: 500px;
-            position: relative;
-        }
-        .wp-subscribers-modal-close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            line-height: 20px;
-            cursor: pointer;
-        }
-        .wp-subscribers-modal-close:hover {
-            color: #000;
-        }
-        .action-button {
-            margin-right: 5px;
-            font-size: 12px;
-        }
         </style>
-
-        <script type="text/javascript">
-        jQuery(document).ready(function($) {
-            let currentFilter = 'current_site';
-
-            function loadSubscribers() {
-                $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 40px;"><span class="spinner is-active" style="float: none; margin: 0;"></span><p>' + wpSubscribersListI18n.loading + '</p></td></tr>');
-
-                $.ajax({
-                    url: wpSubscribersListI18n.ajaxUrl,
-                    type: 'POST',
-                    data: {
-                        action: 'wp_subscribers_get_list',
-                        filter: currentFilter,
-                        nonce: wpSubscribersListI18n.nonce
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            renderSubscribers(response.data.subscribers);
-                            renderStats(response.data.stats);
-                        } else {
-                            $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 20px; color: #dc3232;">' + wpSubscribersListI18n.loadError + '</td></tr>');
-                        }
-                    },
-                    error: function() {
-                        $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 20px; color: #dc3232;">' + wpSubscribersListI18n.connectionError + '</td></tr>');
-                    }
-                });
-            }
-
-            function renderStats(stats) {
-                $('#stat-total').text(stats.total || 0);
-                $('#stat-active').text(stats.active || 0);
-                $('#stat-inactive').text(stats.inactive || 0);
-                $('#stat-unsubscribed').text(stats.unsubscribed || 0);
-                $('#stat-bounced').text(stats.bounced || 0);
-            }
-
-            function renderSubscribers(subscribers) {
-                if (subscribers.length === 0) {
-                    $('#subscribers-table-body').html('<tr><td colspan="7" style="text-align: center; padding: 20px;">' + wpSubscribersListI18n.noSubscribers + '</td></tr>');
-                    return;
-                }
-
-                let html = '';
-                subscribers.forEach(function(sub) {
-                    let statusClass = 'status-' + sub.status;
-                    let statusText = sub.status === 'active' ? wpSubscribersListI18n.statusActive :
-                                    sub.status === 'inactive' ? wpSubscribersListI18n.statusInactive :
-                                    sub.status === 'unsubscribed' ? wpSubscribersListI18n.statusUnsubscribed : wpSubscribersListI18n.statusBounced;
-
-                    html += '<tr>';
-                    html += '<td><strong>' + escapeHtml(sub.name) + '</strong></td>';
-                    html += '<td>' + escapeHtml(sub.email) + '</td>';
-                    html += '<td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td>';
-                    html += '<td><small>' + (sub.website_url || '-') + '</small></td>';
-                    html += '<td>' + formatDate(sub.subscribed_date) + '</td>';
-                    html += '<td>' + (sub.source || '-') + '</td>';
-                    html += '<td>';
-                    html += '<button class="button button-small action-button change-status" data-email="' + sub.email + '" data-name="' + escapeHtml(sub.name) + '" data-status="' + sub.status + '">' + wpSubscribersListI18n.changeStatusButton + '</button>';
-                    if (sub.status !== 'unsubscribed') {
-                        html += '<button class="button button-small action-button button-link-delete unsubscribe-all" data-email="' + sub.email + '" data-name="' + escapeHtml(sub.name) + '">' + wpSubscribersListI18n.unsubscribeAllButton + '</button>';
-                    }
-                    html += '</td>';
-                    html += '</tr>';
-                });
-
-                $('#subscribers-table-body').html(html);
-            }
-
-            function formatDate(dateString) {
-                let date = new Date(dateString);
-                return date.toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' });
-            }
-
-            function escapeHtml(text) {
-                if (!text) return '';
-                return text.replace(/[&<>"']/g, function(m) {
-                    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
-                });
-            }
-
-            // Event: Aplicar filtro
-            $('#apply-filter').on('click', function() {
-                currentFilter = $('input[name="subscriber_filter"]:checked').val();
-                loadSubscribers();
-            });
-
-            // Event: Actualizar
-            $('#refresh-list').on('click', function() {
-                loadSubscribers();
-            });
-
-            // Event: Cambiar estado
-            $(document).on('click', '.change-status', function() {
-                let email = $(this).data('email');
-                let name = $(this).data('name');
-                let currentStatus = $(this).data('status');
-
-                $('#modal-email').val(email);
-                $('#modal-subscriber-name').text(name);
-                $('#modal-subscriber-email').text(email);
-                $('#modal-status').val(currentStatus);
-                $('#modal-notes').val('');
-
-                $('#status-modal').fadeIn();
-            });
-
-            // Event: Cerrar modal
-            $('.wp-subscribers-modal-close, .modal-cancel').on('click', function() {
-                $('#status-modal').fadeOut();
-            });
-
-            // Event: Submit cambiar estado
-            $('#status-form').on('submit', function(e) {
-                e.preventDefault();
-
-                let email = $('#modal-email').val();
-                let status = $('#modal-status').val();
-                let notes = $('#modal-notes').val();
-
-                $.ajax({
-                    url: wpSubscribersListI18n.ajaxUrl,
-                    type: 'POST',
-                    data: {
-                        action: 'wp_subscribers_update_status',
-                        email: email,
-                        status: status,
-                        notes: notes,
-                        nonce: wpSubscribersListI18n.nonce
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            $('#status-modal').fadeOut();
-                            loadSubscribers();
-                            alert(wpSubscribersListI18n.statusUpdated);
-                        } else {
-                            alert(wpSubscribersListI18n.error + ': ' + response.data.message);
-                        }
-                    }
-                });
-            });
-
-            // Event: Desuscribir de todos
-            $(document).on('click', '.unsubscribe-all', function() {
-                let email = $(this).data('email');
-                let name = $(this).data('name');
-
-                let reason = prompt(wpSubscribersListI18n.unsubscribePrompt.replace('%s', name));
-
-                if (reason === null) return; // Cancelado
-
-                if (confirm(wpSubscribersListI18n.unsubscribeConfirm.replace('%s', name).replace('%s', email))) {
-                    $.ajax({
-                        url: wpSubscribersListI18n.ajaxUrl,
-                        type: 'POST',
-                        data: {
-                            action: 'wp_subscribers_unsubscribe_all',
-                            email: email,
-                            reason: reason,
-                            nonce: wpSubscribersListI18n.nonce
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                loadSubscribers();
-                                alert(wpSubscribersListI18n.unsubscribeSuccess.replace('%d', response.data.affected_rows));
-                            } else {
-                                alert(wpSubscribersListI18n.error + ': ' + response.data.message);
-                            }
-                        }
-                    });
-                }
-            });
-
-            // Cargar inicialmente
-            loadSubscribers();
-        });
-        </script>
         <?php
     }
 }
