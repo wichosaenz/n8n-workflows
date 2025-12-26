@@ -2,7 +2,7 @@
 
 Plugin de WordPress para gestionar una lista de suscriptores con base de datos MySQL personalizada en Dreamhost.
 
-**Versión:** 1.3.2
+**Versión:** 1.3.3
 **Autor:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
 
@@ -595,7 +595,7 @@ wp-subscribers-plugin/
 
 **Desarrollador:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
-**Versión:** 1.3.2
+**Versión:** 1.3.3
 
 ---
 
@@ -606,6 +606,18 @@ Este plugin está licenciado bajo GPL v2 o posterior.
 ---
 
 ## 🔄 Changelog
+
+### Versión 1.3.3 (2024) ⚡
+- 🎯 **Simplificación de Lista de Suscriptores**: Eliminada complejidad de AJAX - renderizado directo en PHP
+- ⚡ **Rendimiento mejorado**: Carga inmediata de la lista sin esperas ni loading spinners
+- 🐛 **Fix definitivo**: Resuelto problema de lista que se quedaba en "Loading subscribers..."
+- 🔧 **HTML puro**: Eliminado JavaScript complejo - ahora usa formularios HTML simples
+- 📊 **Estadísticas instantáneas**: Datos cargados directamente desde PHP sin AJAX
+- 🚀 **Diagnóstico mejorado**: Mensaje de error claro si hay problemas de conexión a BD
+- 💻 **Debugging simplificado**: Errores visibles inmediatamente en lugar de fallos silenciosos
+- 🎨 **UI limpia**: Eliminados modales y scripts innecesarios para enfocarse en productividad
+- ✅ **Filtros funcionales**: Sistema de filtros por sitio usando GET en lugar de AJAX
+- 📱 **Más rápido y confiable**: Sin dependencias de jQuery ni problemas de nonce
 
 ### Versión 1.3.2 (2024) 🔧
 - 🐛 **Fix crítico**: Corregido error en Lista de Suscriptores que quedaba en "Cargando..."
