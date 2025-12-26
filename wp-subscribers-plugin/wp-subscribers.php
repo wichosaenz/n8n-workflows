@@ -2,8 +2,8 @@
 /**
  * Plugin Name: WP Subscribers Manager
  * Plugin URI: https://www.wichosaenz.com
- * Description: Plugin para gestionar suscriptores con base de datos MySQL personalizada en Dreamhost. Soporta múltiples idiomas (español/inglés), tracking de múltiples sitios web, sistema de debug avanzado, gestión de suscriptores con filtros, y desuscripción con razones.
- * Version: 1.3.3
+ * Description: Plugin para gestionar suscriptores con base de datos MySQL personalizada en Dreamhost. Soporta múltiples idiomas (español/inglés), tracking de múltiples sitios web, sistema de debug avanzado, gestión de suscriptores con filtros, desuscripción con razones, y notificaciones automáticas por email vía SMTP.
+ * Version: 1.4.0
  * Author: Wicho Saenz
  * Author URI: https://www.wichosaenz.com
  * Text Domain: wp-subscribers
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('WP_SUBSCRIBERS_VERSION', '1.3.3');
+define('WP_SUBSCRIBERS_VERSION', '1.4.0');
 define('WP_SUBSCRIBERS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WP_SUBSCRIBERS_PLUGIN_URL', plugin_dir_url(__FILE__));
 

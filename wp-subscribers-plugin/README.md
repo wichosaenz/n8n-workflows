@@ -2,7 +2,7 @@
 
 Plugin de WordPress para gestionar una lista de suscriptores con base de datos MySQL personalizada en Dreamhost.
 
-**Versión:** 1.3.3
+**Versión:** 1.4.0
 **Autor:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
 
@@ -24,9 +24,16 @@ WP Subscribers Manager es un plugin completo para WordPress que te permite crear
 ✅ Interfaz de administración intuitiva
 ✅ Envío de formulario con AJAX (sin recargar página)
 ✅ Responsive y compatible con dispositivos móviles
-✅ **NUEVO v1.3.1:** Internacionalización completa (i18n) con detección automática de idioma
-✅ **NUEVO v1.3.1:** Traducción al inglés incluida (en_US)
-✅ **NUEVO v1.3.1:** Archivos .pot, .po y .mo para traducciones personalizadas
+✅ **NUEVO v1.4.0:** 📧 Notificaciones automáticas por email (SMTP)
+✅ **NUEVO v1.4.0:** 📬 Configuración SMTP completa (Gmail, Dreamhost, Office365, etc.)
+✅ **NUEVO v1.4.0:** 📨 Emails HTML profesionales con detalles del suscriptor
+✅ **NUEVO v1.4.0:** ✉️ Múltiples destinatarios de notificaciones (separados por comas)
+✅ **NUEVO v1.4.0:** ✅ Botón de "Enviar Email de Prueba" para verificar configuración
+✅ **NUEVO v1.4.0:** 🔔 Activar/desactivar notificaciones fácilmente
+✅ v1.3.3: Simplificación de lista de suscriptores con carga instantánea
+✅ v1.3.1: Internacionalización completa (i18n) con detección automática de idioma
+✅ v1.3.1: Traducción al inglés incluida (en_US)
+✅ v1.3.1: Archivos .pot, .po y .mo para traducciones personalizadas
 ✅ v1.3.0: Lista completa de suscriptores con filtros por sitio
 ✅ v1.3.0: Estadísticas de suscriptores en tiempo real
 ✅ v1.3.0: Cambio de estado de suscriptores desde el admin
@@ -111,6 +118,77 @@ Success: Thank you for subscribing!
 Error: An error occurred. Please try again.
 Duplicate: This email is already subscribed.
 ```
+
+### 3. Configurar Notificaciones SMTP (v1.4.0) 📧
+
+Recibe un email automático cada vez que alguien se suscriba a tu sitio.
+
+**Paso 1: Configurar Servidor SMTP**
+
+Completa los siguientes campos con los datos de tu proveedor de email:
+
+- **Servidor SMTP**: El hostname de tu servidor SMTP
+  - Gmail: `smtp.gmail.com`
+  - Dreamhost: `smtp.dreamhost.com`
+  - Office 365: `smtp.office365.com`
+
+- **Puerto SMTP**: Puerto de conexión
+  - TLS (recomendado): `587`
+  - SSL: `465`
+
+- **Seguridad/Encriptación**: Selecciona `TLS` (recomendado)
+
+- **Usuario / Email SMTP**: Tu email completo
+  - Ejemplo: `tu-email@ejemplo.com`
+
+- **Contraseña SMTP**: La contraseña de tu cuenta
+  - **Nota para Gmail**: Debes usar una [Contraseña de Aplicación](https://support.google.com/accounts/answer/185833)
+
+- **Nombre del Remitente**: Nombre que aparecerá como remitente
+  - Por defecto: El nombre de tu sitio
+
+**Paso 2: Probar Configuración**
+
+1. Ingresa un email de prueba en el campo debajo de la configuración SMTP
+2. Haz clic en **"Enviar Email de Prueba"**
+3. Verifica que llegue el email de prueba a tu bandeja de entrada
+4. Si hay errores, revisa tu configuración SMTP
+
+**Paso 3: Configurar Destinatarios**
+
+- **Activar Notificaciones**: Marca la casilla para activar
+- **Destinatarios**: Ingresa los emails que recibirán notificaciones, separados por comas
+  ```
+  admin@ejemplo.com, ventas@ejemplo.com, marketing@ejemplo.com
+  ```
+- **Asunto del Email**: Personaliza el asunto (por defecto: "🎉 Nueva suscripción en TuSitio")
+
+**Ejemplo de Email de Notificación:**
+
+El email incluye:
+- 👤 Nombre del suscriptor
+- 📧 Email del suscriptor
+- 📅 Fecha y hora de suscripción
+- 🌐 Sitio web de origen
+- 🖥️ Dirección IP
+- 📍 Origen (shortcode, widget, etc.)
+- Botón para ver la lista completa de suscriptores
+
+**Proveedores SMTP Recomendados:**
+
+| Proveedor | Servidor SMTP | Puerto | Seguridad |
+|-----------|---------------|--------|-----------|
+| Gmail | smtp.gmail.com | 587 | TLS |
+| Dreamhost | smtp.dreamhost.com | 587 | TLS |
+| Office 365 | smtp.office365.com | 587 | TLS |
+| Outlook.com | smtp-mail.outlook.com | 587 | TLS |
+| Yahoo | smtp.mail.yahoo.com | 587 | TLS |
+
+**Notas Importantes:**
+
+⚠️ **Gmail**: Necesitas generar una "Contraseña de Aplicación" en tu cuenta de Google
+⚠️ **Verificación en 2 pasos**: Si tu email tiene verificación en 2 pasos, usa una contraseña de aplicación
+⚠️ **Dreamhost**: Asegúrate de que tu cuenta de email esté creada en el panel de Dreamhost
 
 ---
 
@@ -595,7 +673,7 @@ wp-subscribers-plugin/
 
 **Desarrollador:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
-**Versión:** 1.3.3
+**Versión:** 1.4.0
 
 ---
 
@@ -606,6 +684,24 @@ Este plugin está licenciado bajo GPL v2 o posterior.
 ---
 
 ## 🔄 Changelog
+
+### Versión 1.4.0 (2024) 📧
+- 🆕 **Notificaciones automáticas por email**: Recibe un email cada vez que alguien se suscriba
+- 🆕 **Configuración SMTP completa**: Soporta Gmail, Dreamhost, Office365, y cualquier servidor SMTP
+- 🆕 **Emails HTML profesionales**: Plantilla elegante con gradientes morados y toda la información del suscriptor
+- 🆕 **Múltiples destinatarios**: Configura varios emails separados por comas para recibir notificaciones
+- 🆕 **Botón de prueba de email**: Verifica tu configuración SMTP antes de activar las notificaciones
+- 🆕 **Activar/desactivar notificaciones**: Control fácil con un checkbox
+- 🆕 **Asunto personalizable**: Configura el asunto del email de notificación
+- 🆕 **Detalles completos en el email**: Nombre, email, fecha/hora, sitio web, IP y origen del suscriptor
+- 🆕 **Integración automática**: Los emails se envían automáticamente al insertar un nuevo suscriptor
+- 🆕 **No bloqueante**: El envío de email no afecta la experiencia del usuario en el frontend
+- 📧 **Clase WP_Subscribers_Email_Notifications**: Nueva clase dedicada para manejo de emails
+- 📁 **Archivo**: includes/class-email-notifications.php (300+ líneas)
+- 🔧 **AJAX endpoint**: wp_ajax_wp_subscribers_test_email para probar configuración
+- 🎨 **Diseño del email**: Gradiente morado (#667eea → #764ba2), responsive, formato HTML
+- 🔒 **Seguridad SMTP**: Soporte para TLS, SSL y sin encriptación
+- 📝 **Documentación completa**: Guía paso a paso para configurar SMTP en README.md
 
 ### Versión 1.3.3 (2024) ⚡
 - 🎯 **Simplificación de Lista de Suscriptores**: Eliminada complejidad de AJAX - renderizado directo en PHP

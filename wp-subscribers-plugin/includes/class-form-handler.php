@@ -74,6 +74,9 @@ class WP_Subscribers_Form_Handler {
         $labels = isset($settings['labels']) ? $settings['labels'] : array();
 
         if ($result['success']) {
+            // Enviar notificación por email
+            $this->send_new_subscriber_notification($name, $email);
+
             $message = isset($labels['success_message']) ?
                        $labels['success_message'] :
                        __('¡Gracias por suscribirte!', 'wp-subscribers');
@@ -136,6 +139,33 @@ class WP_Subscribers_Form_Handler {
                 'message' => __('Hubo un error al procesar tu baja. Por favor, intenta de nuevo.', 'wp-subscribers')
             ));
         }
+    }
+
+    /**
+     * Enviar notificación de nuevo suscriptor
+     */
+    private function send_new_subscriber_notification($name, $email) {
+        // Cargar clase de notificaciones
+        require_once WP_SUBSCRIBERS_PLUGIN_DIR . 'includes/class-email-notifications.php';
+        $email_notifications = new WP_Subscribers_Email_Notifications();
+
+        // Verificar si las notificaciones están activadas
+        if (!$email_notifications->is_smtp_configured()) {
+            return; // SMTP no configurado, no enviar
+        }
+
+        // Preparar datos del suscriptor
+        $subscriber_data = array(
+            'name' => $name,
+            'email' => $email,
+            'subscribed_date' => current_time('mysql'),
+            'website_url' => home_url(),
+            'ip_address' => $_SERVER['REMOTE_ADDR'],
+            'source' => 'shortcode' // Puede ser shortcode o widget
+        );
+
+        // Enviar notificación (no bloqueante, no afecta la experiencia del usuario)
+        $email_notifications->send_new_subscriber_notification($subscriber_data);
     }
 
     /**
