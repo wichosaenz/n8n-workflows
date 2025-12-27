@@ -1,0 +1,396 @@
+{
+  "name": "LLMS.txt MAIN - Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "TU_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Sitios Infraestructura"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "options": {
+          "rangeDefinition": "specifyRange",
+          "range": "A:F"
+        }
+      },
+      "id": "start-google-sheets",
+      "name": "Google Sheets - Config",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [250, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-sitios",
+      "name": "Split Sitios (1 por vez)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar datos del sitio para enviar al subworkflow\nconst siteData = $input.item.json;\n\n// Validación básica de datos requeridos\nif (!siteData.Sitio_URL || !siteData.WP_API_Key) {\n  return {\n    json: {\n      ...siteData,\n      validation_error: true,\n      error_message: 'Sitio_URL o WP_API_Key faltante',\n      site_domain: siteData.Sitio_URL ? new URL(siteData.Sitio_URL).hostname : 'unknown'\n    }\n  };\n}\n\nconst siteDomain = new URL(siteData.Sitio_URL).hostname;\n\nreturn {\n  json: {\n    ...siteData,\n    site_domain: siteDomain,\n    validation_error: false,\n    processing_timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "validate-site-data",
+      "name": "Validar Datos Sitio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "validation-check",
+              "leftValue": "={{ $json.validation_error }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-validation",
+      "name": "Validación OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $('Set Subworkflow IDs').item.json.process_site_workflow_id }}",
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "name": "siteData",
+              "value": "={{ JSON.stringify($json) }}"
+            }
+          ]
+        }
+      },
+      "id": "execute-process-site",
+      "name": "Execute: Process Site",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [1050, 200],
+      "notes": "Llama al subworkflow que procesa un sitio completo",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "success-check",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "SUCCESS",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-site-result",
+      "name": "Procesamiento Exitoso?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log de resultado exitoso\nconst result = $input.item.json;\n\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  site: result.site_domain || result.Sitio_URL,\n  status: 'SUCCESS',\n  articles_processed: result.articles_processed || 0,\n  file_size: result.file_size || 0,\n  insights_generated: result.insights_count || 0,\n  upload_status: result.upload_status || 'UNKNOWN',\n  execution_time_ms: result.execution_time_ms || 0\n};\n\nconsole.log('✅ Sitio procesado exitosamente:', JSON.stringify(logEntry, null, 2));\n\nreturn {\n  json: logEntry\n};"
+      },
+      "id": "log-success",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log de error o fallo\nconst result = $input.item.json;\nconst siteInfo = $input.first().json;\n\n// Detectar si viene del error output del Execute Workflow\nconst isErrorOutput = result.error !== undefined;\n\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  site: result.site_domain || siteInfo.site_domain || 'unknown',\n  status: 'FAILED',\n  error_type: isErrorOutput ? 'SUBWORKFLOW_ERROR' : (result.status || 'UNKNOWN_ERROR'),\n  error_message: result.error_message || result.error?.message || 'Error no especificado',\n  error_details: {\n    validation_error: siteInfo.validation_error || false,\n    api_error: result.api_error || false,\n    sftp_error: result.sftp_error || false,\n    ai_error: result.ai_error || false\n  },\n  articles_attempted: result.articles_processed || 0\n};\n\nconsole.error('❌ Error procesando sitio:', JSON.stringify(logEntry, null, 2));\n\nreturn {\n  json: logEntry\n};"
+      },
+      "id": "log-error",
+      "name": "Log Error/Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 400],
+      "notes": "Loguea errores pero NO detiene el workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log de error de validación (sitio sin datos requeridos)\nconst siteData = $input.item.json;\n\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  site: siteData.site_domain || siteData.Sitio_URL || 'unknown',\n  status: 'VALIDATION_FAILED',\n  error_type: 'MISSING_REQUIRED_DATA',\n  error_message: siteData.error_message || 'Datos requeridos faltantes',\n  missing_fields: [\n    !siteData.Sitio_URL ? 'Sitio_URL' : null,\n    !siteData.WP_API_Key ? 'WP_API_Key' : null,\n    !siteData.sFTP_Host ? 'sFTP_Host' : null,\n    !siteData.sFTP_User ? 'sFTP_User' : null,\n    !siteData.sFTP_Pass ? 'sFTP_Pass' : null\n  ].filter(f => f !== null)\n};\n\nconsole.error('⚠️ Validación fallida:', JSON.stringify(logEntry, null, 2));\n\nreturn {\n  json: logEntry\n};"
+      },
+      "id": "log-validation-error",
+      "name": "Log Validation Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 400],
+      "notes": "Sitio con datos incompletos - se omite"
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "id": "wait-between-sites",
+      "name": "Wait 3s (Rate Limit)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1700, 300],
+      "webhookId": "main-rate-limit"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-all-logs",
+      "name": "Merge All Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar reporte consolidado final\nconst allResults = $input.all().map(item => item.json);\n\n// Agrupar por status\nconst successResults = allResults.filter(r => r.status === 'SUCCESS');\nconst failedResults = allResults.filter(r => r.status === 'FAILED');\nconst validationFailedResults = allResults.filter(r => r.status === 'VALIDATION_FAILED');\nconst skippedResults = allResults.filter(r => r.status === 'SKIPPED');\n\n// Estadísticas\nconst totalArticlesProcessed = successResults.reduce((sum, r) => sum + (r.articles_processed || 0), 0);\nconst totalFileSize = successResults.reduce((sum, r) => sum + (r.file_size || 0), 0);\nconst avgExecutionTime = successResults.length > 0 \n  ? successResults.reduce((sum, r) => sum + (r.execution_time_ms || 0), 0) / successResults.length \n  : 0;\n\n// Agrupar errores por tipo\nconst errorsByType = failedResults.reduce((acc, r) => {\n  const errorType = r.error_type || 'UNKNOWN';\n  acc[errorType] = (acc[errorType] || 0) + 1;\n  return acc;\n}, {});\n\nconst summary = {\n  execution_timestamp: new Date().toISOString(),\n  total_sites_in_config: allResults.length,\n  successful_uploads: successResults.length,\n  failed_sites: failedResults.length,\n  validation_failed: validationFailedResults.length,\n  skipped_sites: skippedResults.length,\n  total_articles_processed: totalArticlesProcessed,\n  total_file_size_bytes: totalFileSize,\n  avg_execution_time_ms: Math.round(avgExecutionTime),\n  success_rate: ((successResults.length / allResults.length) * 100).toFixed(2) + '%',\n  errors_by_type: errorsByType,\n  detailed_results: allResults\n};\n\n// Log resumen ejecutivo\nconst executiveSummary = `\n╔════════════════════════════════════════════════════════════╗\n║           REPORTE FINAL - LLMS.txt Auto-Updater           ║\n╚════════════════════════════════════════════════════════════╝\n\n📊 RESUMEN EJECUTIVO:\n  • Total de sitios: ${allResults.length}\n  • ✅ Exitosos: ${successResults.length}\n  • ❌ Fallidos: ${failedResults.length}\n  • ⚠️  Validación fallida: ${validationFailedResults.length}\n  • ⏭️  Omitidos: ${skippedResults.length}\n  • 📈 Tasa de éxito: ${summary.success_rate}\n\n📝 PROCESAMIENTO:\n  • Total artículos procesados: ${totalArticlesProcessed}\n  • Tamaño total archivos: ${(totalFileSize / 1024).toFixed(2)} KB\n  • Tiempo promedio por sitio: ${Math.round(avgExecutionTime / 1000)}s\n\n❌ ERRORES (si los hay):\n${Object.entries(errorsByType).map(([type, count]) => `  • ${type}: ${count} sitio(s)`).join('\\n') || '  • Sin errores'}\n\n⏰ Ejecutado: ${new Date().toLocaleString()}\n`;\n\nconsole.log(executiveSummary);\n\nreturn {\n  json: summary\n};"
+      },
+      "id": "generate-final-report",
+      "name": "Generar Reporte Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2100, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "process-site-id",
+              "name": "process_site_workflow_id",
+              "value": "PROCESS_SITE_WORKFLOW_ID",
+              "type": "string"
+            },
+            {
+              "id": "generate-insights-id",
+              "name": "generate_insights_workflow_id",
+              "value": "GENERATE_INSIGHTS_WORKFLOW_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-subworkflow-ids",
+      "name": "Set Subworkflow IDs",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [450, 150],
+      "notes": "CONFIGURAR: IDs de los subworkflows después de importarlos"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Sheets - Config": {
+      "main": [
+        [
+          {
+            "node": "Split Sitios (1 por vez)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Sitios (1 por vez)": {
+      "main": [
+        [
+          {
+            "node": "Validar Datos Sitio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Datos Sitio": {
+      "main": [
+        [
+          {
+            "node": "Validación OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validación OK?": {
+      "main": [
+        [
+          {
+            "node": "Execute: Process Site",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute: Process Site": {
+      "main": [
+        [
+          {
+            "node": "Procesamiento Exitoso?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error/Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesamiento Exitoso?": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error/Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Success": {
+      "main": [
+        [
+          {
+            "node": "Wait 3s (Rate Limit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error/Failed": {
+      "main": [
+        [
+          {
+            "node": "Wait 3s (Rate Limit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Validation Error": {
+      "main": [
+        [
+          {
+            "node": "Wait 3s (Rate Limit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 3s (Rate Limit)": {
+      "main": [
+        [
+          {
+            "node": "Split Sitios (1 por vez)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Subworkflow IDs": {
+      "main": [
+        [
+          {
+            "node": "Split Sitios (1 por vez)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "2.0",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "n8n-community-edition"
+  },
+  "id": "llms-txt-main-orchestrator",
+  "tags": [
+    {
+      "id": "main-workflow",
+      "name": "main-workflow"
+    }
+  ]
+}
