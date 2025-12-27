@@ -1,0 +1,576 @@
+{
+  "name": "LLMS.txt Auto-Updater - Insights de Impacto",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "TU_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Sitios Infraestructura",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/TU_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "a8f3c2d1-1234-5678-9abc-def012345678",
+      "name": "Google Sheets - Sitios Config",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        240,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "b9e4d3e2-2345-6789-abcd-ef0123456789",
+      "name": "Split Sitios - Batch Processor",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calcular fecha de lookback basada en Lookback_Days\nconst lookbackDays = $input.item.json.Lookback_Days || 30;\nconst lookbackDate = new Date();\nlookbackDate.setDate(lookbackDate.getDate() - lookbackDays);\n\n// Formato ISO para WordPress API\nconst isoDate = lookbackDate.toISOString();\n\n// Construir la URL de la API de WordPress\nconst siteUrl = $input.item.json.Sitio_URL;\nconst apiUrl = `${siteUrl}/wp-json/wp/v2/posts?after=${isoDate}&per_page=20&_embed&orderby=date&order=desc`;\n\nreturn {\n  json: {\n    ...($input.item.json),\n    lookback_date: isoDate,\n    wp_api_url: apiUrl,\n    site_domain: new URL(siteUrl).hostname\n  }\n};"
+      },
+      "id": "c0f5e4f3-3456-789a-bcde-f01234567890",
+      "name": "Preparar Consulta WP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.wp_api_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.WP_API_Key }}"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": true,
+              "maxRedirects": 5
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "d1g6f5g4-4567-890b-cdef-012345678901",
+      "name": "WordPress API - Fetch Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer y limpiar contenido de artículos\nconst articles = $input.item.json;\nconst siteData = $input.first().json;\n\n// Si no hay artículos, retornar estructura vacía\nif (!Array.isArray(articles) || articles.length === 0) {\n  return {\n    json: {\n      ...siteData,\n      articles: [],\n      has_content: false\n    }\n  };\n}\n\n// Función para limpiar HTML y extraer primeros párrafos\nfunction extractFirstParagraphs(htmlContent, maxParagraphs = 3) {\n  // Remover scripts, styles, y tags complejos\n  let cleaned = htmlContent\n    .replace(/<script[^>]*>.*?<\\/script>/gis, '')\n    .replace(/<style[^>]*>.*?<\\/style>/gis, '')\n    .replace(/<\\/?[^>]+(>|$)/g, ' ')  // Remover todas las tags HTML\n    .replace(/&nbsp;/g, ' ')\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&quot;/g, '\"')\n    .replace(/&#39;/g, \"'\")\n    .replace(/\\s+/g, ' ')  // Normalizar espacios\n    .trim();\n  \n  // Dividir en párrafos (por punto seguido de espacio y mayúscula)\n  const paragraphs = cleaned.split(/\\.\\s+(?=[A-Z])/).filter(p => p.trim().length > 50);\n  \n  // Tomar solo los primeros N párrafos\n  const selectedParagraphs = paragraphs.slice(0, maxParagraphs).join('. ');\n  \n  // Limitar a ~1000 caracteres para optimizar costos de AI\n  return selectedParagraphs.substring(0, 1000) + (selectedParagraphs.length > 1000 ? '...' : '');\n}\n\n// Procesar cada artículo\nconst processedArticles = articles.map(article => {\n  const content = article.content?.rendered || article.excerpt?.rendered || '';\n  const extractedContent = extractFirstParagraphs(content, 3);\n  \n  return {\n    title: article.title?.rendered || 'Sin título',\n    url: article.link || article.guid?.rendered || '',\n    date: article.date || new Date().toISOString(),\n    excerpt_for_ai: extractedContent,\n    word_count: extractedContent.split(/\\s+/).length\n  };\n}).filter(article => article.word_count > 20); // Filtrar artículos muy cortos\n\nreturn {\n  json: {\n    ...siteData,\n    articles: processedArticles,\n    total_articles: processedArticles.length,\n    has_content: processedArticles.length > 0\n  }\n};"
+      },
+      "id": "e2h7g6h5-5678-901c-defg-123456789012",
+      "name": "Extraer y Limpiar Contenido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition1",
+              "leftValue": "={{ $json.has_content }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f3i8h7i6-6789-012d-efgh-234567890123",
+      "name": "Verificar si hay contenido",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "g4j9i8j7-7890-123e-fghi-345678901234",
+      "name": "Split Artículos - AI Processing",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar batch de artículos para procesamiento AI\nconst siteData = $input.first().json;\nconst currentBatch = $input.all().map(item => item.json);\n\n// Tomar los artículos del batch actual\nconst articles = siteData.articles || [];\nconst batchStartIndex = $node['Split Artículos - AI Processing'].context.currentRunIndex * 5;\nconst batchArticles = articles.slice(batchStartIndex, batchStartIndex + 5);\n\nreturn batchArticles.map(article => ({\n  json: {\n    ...siteData,\n    current_article: article\n  }\n}));"
+      },
+      "id": "h5k0j9k8-8901-234f-ghij-456789012345",
+      "name": "Preparar Batch para AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $credentials.anthropicApiKey }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-3-5-haiku-20241022\",\n  \"max_tokens\": 300,\n  \"temperature\": 0.3,\n  \"system\": \"Actúa como un Analista de Inteligencia de Inversiones. Extrae métricas financieras, porcentajes y cifras críticas del texto. Genera un resumen ejecutivo en formato Markdown de máximo 250 caracteres que empiece directamente con el dato más impactante. No uses introducciones como 'Este artículo trata sobre...'. Inicia con números, porcentajes o hechos concretos.\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Analiza este contenido y extrae el insight más impactante:\\n\\nTítulo: {{ $json.current_article.title }}\\n\\nContenido:\\n{{ $json.current_article.excerpt_for_ai }}\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "i6l1k0l9-9012-345g-hijk-567890123456",
+      "name": "Anthropic Claude - Generate Insight",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic API"
+        }
+      },
+      "notes": "Alternativa: Cambiar a Gemini (Vertex AI) si prefieres Google"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer el insight generado por Claude\nconst response = $input.item.json;\nconst article = $input.first().json.current_article;\nconst siteData = $input.first().json;\n\n// Parsear respuesta de Anthropic\nlet insight = 'Información relevante sobre infraestructura y logística.';\n\nif (response.content && Array.isArray(response.content) && response.content.length > 0) {\n  insight = response.content[0].text || insight;\n  // Limpiar y limitar a 250 caracteres\n  insight = insight.trim().substring(0, 250);\n  // Asegurar que termine en punto si fue cortado\n  if (insight.length === 250 && !insight.endsWith('.')) {\n    insight = insight.substring(0, 247) + '...';\n  }\n}\n\nreturn {\n  json: {\n    ...siteData,\n    processed_article: {\n      title: article.title,\n      url: article.url,\n      date: article.date,\n      insight: insight\n    }\n  }\n};"
+      },
+      "id": "j7m2l1m0-0123-456h-ijkl-678901234567",
+      "name": "Procesar Respuesta AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agregar artículo procesado a la lista acumulada\nconst allItems = $input.all();\nconst processedArticles = allItems.map(item => item.json.processed_article);\n\n// Recuperar datos del sitio\nconst siteData = $input.first().json;\n\nreturn {\n  json: {\n    ...siteData,\n    processed_articles: processedArticles\n  }\n};"
+      },
+      "id": "k8n3m2n1-1234-567i-jklm-789012345678",
+      "name": "Acumular Artículos Procesados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construir el archivo llms.txt completo\nconst siteData = $input.item.json;\nconst processedArticles = siteData.processed_articles || [];\nconst siteDomain = siteData.site_domain || new URL(siteData.Sitio_URL).hostname;\nconst siteUrl = siteData.Sitio_URL;\n\n// Header del archivo llms.txt\nconst header = `# ${siteDomain}\n\n> Portal de Infraestructura y Logística - Insights de Impacto para Deep Research\n> Actualizado: ${new Date().toISOString().split('T')[0]}\n> Artículos procesados: ${processedArticles.length}\n\n## Recursos principales\n\n- Sitio web: ${siteUrl}\n- RSS Feed: ${siteUrl}/feed/\n- API: ${siteUrl}/wp-json/wp/v2/\n\n---\n\n## Insights de Impacto Recientes\n\n`;\n\n// Construir sección de artículos\nconst articlesSection = processedArticles.map((article, index) => {\n  return `### ${index + 1}. [${article.title}](${article.url})\n\n**Insight:** ${article.insight}\n\n**Fecha:** ${new Date(article.date).toISOString().split('T')[0]}\n\n---\n`;\n}).join('\\n');\n\n// Footer\nconst footer = `\n## Sobre este archivo\n\nEste archivo llms.txt ha sido generado automáticamente para optimizar la recuperación de información por modelos de lenguaje de gran escala (LLMs). Los insights presentados están diseñados para:\n\n- Investigación profunda (Deep Research)\n- Análisis de inversiones en infraestructura\n- Inteligencia de mercado logístico\n- Toma de decisiones basada en datos\n\n**Metodología:** Extracción automática de métricas clave, cifras financieras y análisis de impacto mediante AI.\n\n**Actualización:** Este archivo se regenera automáticamente cada ${siteData.Lookback_Days || 30} días.\n\n**Contacto:** Para más información, visite ${siteUrl}\n`;\n\n// Archivo completo\nconst llmsTxtContent = header + articlesSection + footer;\n\nreturn {\n  json: {\n    ...siteData,\n    llms_txt_content: llmsTxtContent,\n    llms_txt_filename: 'llms.txt',\n    file_size: Buffer.from(llmsTxtContent, 'utf-8').length,\n    ready_for_upload: true\n  }\n};"
+      },
+      "id": "l9o4n3o2-2345-678j-klmn-890123456789",
+      "name": "Construir Archivo llms.txt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "protocol": "sftp",
+        "operation": "upload",
+        "path": "/public_html/llms.txt",
+        "binaryData": false,
+        "fileContent": "={{ $json.llms_txt_content }}",
+        "options": {}
+      },
+      "id": "m0p5o4p3-3456-789k-lmno-901234567890",
+      "name": "sFTP - Upload llms.txt",
+      "type": "n8n-nodes-base.ftp",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        400
+      ],
+      "credentials": {
+        "sftp": {
+          "id": "SFTP_CREDENTIAL_ID",
+          "name": "sFTP Dynamic"
+        }
+      },
+      "notes": "Credenciales configuradas dinámicamente desde el flujo"
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "n1q6p5q4-4567-890l-mnop-012345678901",
+      "name": "Wait - Rate Limit Protection",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        400
+      ],
+      "webhookId": "rate-limit-wait"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log de resultados para monitoreo\nconst siteData = $input.item.json;\n\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  site: siteData.site_domain,\n  articles_processed: siteData.processed_articles?.length || 0,\n  file_size: siteData.file_size || 0,\n  status: siteData.ready_for_upload ? 'SUCCESS' : 'FAILED',\n  sftp_host: siteData.sFTP_Host\n};\n\nconsole.log('✅ Sitio procesado:', JSON.stringify(logEntry, null, 2));\n\nreturn {\n  json: logEntry\n};"
+      },
+      "id": "o2r7q6r5-5678-901m-nopq-123456789012",
+      "name": "Log Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Manejo de sitios sin contenido nuevo\nconst siteData = $input.item.json;\n\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  site: siteData.site_domain,\n  articles_processed: 0,\n  status: 'SKIPPED - No new content',\n  lookback_days: siteData.Lookback_Days\n};\n\nconsole.log('⚠️ Sitio sin contenido nuevo:', JSON.stringify(logEntry, null, 2));\n\nreturn {\n  json: logEntry\n};"
+      },
+      "id": "p3s8r7s6-6789-012n-opqr-234567890123",
+      "name": "Log Sin Contenido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "q4t9s8t7-7890-123o-pqrs-345678901234",
+      "name": "Merge Resultados Finales",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        2440,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar reporte final consolidado\nconst allResults = $input.all().map(item => item.json);\n\nconst summary = {\n  execution_timestamp: new Date().toISOString(),\n  total_sites_processed: allResults.length,\n  successful_uploads: allResults.filter(r => r.status === 'SUCCESS').length,\n  skipped_sites: allResults.filter(r => r.status?.includes('SKIPPED')).length,\n  total_articles_processed: allResults.reduce((sum, r) => sum + (r.articles_processed || 0), 0),\n  total_file_size_bytes: allResults.reduce((sum, r) => sum + (r.file_size || 0), 0),\n  results: allResults\n};\n\nconsole.log('\\n📊 REPORTE FINAL DE EJECUCIÓN:\\n', JSON.stringify(summary, null, 2));\n\nreturn {\n  json: summary\n};"
+      },
+      "id": "r5u0t9u8-8901-234p-qrst-456789012345",
+      "name": "Generar Reporte Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        400
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Sheets - Sitios Config": {
+      "main": [
+        [
+          {
+            "node": "Split Sitios - Batch Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Sitios - Batch Processor": {
+      "main": [
+        [
+          {
+            "node": "Preparar Consulta WP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Consulta WP": {
+      "main": [
+        [
+          {
+            "node": "WordPress API - Fetch Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WordPress API - Fetch Posts": {
+      "main": [
+        [
+          {
+            "node": "Extraer y Limpiar Contenido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer y Limpiar Contenido": {
+      "main": [
+        [
+          {
+            "node": "Verificar si hay contenido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar si hay contenido": {
+      "main": [
+        [
+          {
+            "node": "Split Artículos - AI Processing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Sin Contenido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Artículos - AI Processing": {
+      "main": [
+        [
+          {
+            "node": "Preparar Batch para AI",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Construir Archivo llms.txt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Batch para AI": {
+      "main": [
+        [
+          {
+            "node": "Anthropic Claude - Generate Insight",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Claude - Generate Insight": {
+      "main": [
+        [
+          {
+            "node": "Procesar Respuesta AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar Respuesta AI": {
+      "main": [
+        [
+          {
+            "node": "Split Artículos - AI Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir Archivo llms.txt": {
+      "main": [
+        [
+          {
+            "node": "sFTP - Upload llms.txt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sFTP - Upload llms.txt": {
+      "main": [
+        [
+          {
+            "node": "Wait - Rate Limit Protection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait - Rate Limit Protection": {
+      "main": [
+        [
+          {
+            "node": "Log Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Resultado": {
+      "main": [
+        [
+          {
+            "node": "Split Sitios - Batch Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Sin Contenido": {
+      "main": [
+        [
+          {
+            "node": "Split Sitios - Batch Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acumular Artículos Procesados": {
+      "main": [
+        [
+          {
+            "node": "Construir Archivo llms.txt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Resultados Finales": {
+      "main": [
+        [
+          {
+            "node": "Generar Reporte Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "n8n-community-edition"
+  },
+  "id": "llms-txt-auto-updater",
+  "tags": []
+}
