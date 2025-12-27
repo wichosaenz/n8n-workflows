@@ -1,0 +1,479 @@
+{
+  "name": "LLMS.txt SUBWORKFLOW - Process Site",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-execute-workflow",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsear datos del sitio recibidos del workflow principal\nconst siteDataStr = $input.item.json.siteData;\nconst siteData = typeof siteDataStr === 'string' ? JSON.parse(siteDataStr) : siteDataStr;\n\n// Calcular fecha de lookback\nconst lookbackDays = siteData.Lookback_Days || 30;\nconst lookbackDate = new Date();\nlookbackDate.setDate(lookbackDate.getDate() - lookbackDays);\nconst isoDate = lookbackDate.toISOString();\n\n// Construir URL de WordPress API\nconst siteUrl = siteData.Sitio_URL;\nconst apiUrl = `${siteUrl}/wp-json/wp/v2/posts?after=${isoDate}&per_page=50&_embed&orderby=date&order=desc`;\n\n// Timestamp de inicio\nconst startTime = Date.now();\n\nreturn {\n  json: {\n    ...siteData,\n    lookback_date: isoDate,\n    wp_api_url: apiUrl,\n    start_time: startTime,\n    processing_step: 'INITIALIZED'\n  }\n};"
+      },
+      "id": "parse-site-data",
+      "name": "Parse Site Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.wp_api_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.WP_API_Key }}"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-llms-updater/2.0"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": true,
+              "maxRedirects": 3
+            }
+          },
+          "timeout": 25000,
+          "retry": {
+            "retry": {
+              "maxRetries": 2,
+              "retryInterval": 2000
+            }
+          }
+        }
+      },
+      "id": "wordpress-api-call",
+      "name": "WordPress API - Fetch Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 300],
+      "continueOnFail": true,
+      "notes": "Intenta obtener posts de WordPress con reintentos"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validar respuesta de WordPress API\nconst response = $input.item.json;\nconst siteData = $input.first().json;\n\n// Verificar si hubo error en la llamada\nif (response.error || !response || (Array.isArray(response) && response.length === 0 && response.error)) {\n  return {\n    json: {\n      ...siteData,\n      api_call_success: false,\n      api_error: true,\n      error_message: response.error?.message || response.message || 'WordPress API no retornó datos',\n      error_code: response.error?.code || response.statusCode || 'UNKNOWN',\n      articles: [],\n      processing_step: 'WP_API_ERROR'\n    }\n  };\n}\n\n// Si es un array vacío pero sin error, es sitio sin contenido nuevo\nif (Array.isArray(response) && response.length === 0) {\n  return {\n    json: {\n      ...siteData,\n      api_call_success: true,\n      api_error: false,\n      articles: [],\n      processing_step: 'NO_NEW_CONTENT'\n    }\n  };\n}\n\n// Llamada exitosa con artículos\nconst articles = Array.isArray(response) ? response : [response];\n\nreturn {\n  json: {\n    ...siteData,\n    api_call_success: true,\n    api_error: false,\n    raw_articles: articles,\n    raw_articles_count: articles.length,\n    processing_step: 'WP_API_SUCCESS'\n  }\n};"
+      },
+      "id": "validate-wp-response",
+      "name": "Validar Respuesta WP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "api-success-check",
+              "leftValue": "={{ $json.api_call_success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-api-success",
+      "name": "API Call OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retornar error de API al workflow principal\nconst siteData = $input.item.json;\nconst executionTime = Date.now() - siteData.start_time;\n\nreturn {\n  json: {\n    site_domain: siteData.site_domain,\n    Sitio_URL: siteData.Sitio_URL,\n    status: 'FAILED',\n    error_type: 'WP_API_ERROR',\n    error_message: siteData.error_message || 'Error al conectar con WordPress API',\n    error_code: siteData.error_code || 'UNKNOWN',\n    api_error: true,\n    articles_processed: 0,\n    execution_time_ms: executionTime\n  }\n};"
+      },
+      "id": "return-api-error",
+      "name": "Return API Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 450],
+      "notes": "Retorna al MAIN workflow indicando fallo de API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer y limpiar contenido de artículos\nconst siteData = $input.item.json;\nconst rawArticles = siteData.raw_articles || [];\n\n// Función para limpiar HTML y extraer primeros párrafos\nfunction extractFirstParagraphs(htmlContent, maxParagraphs = 3) {\n  if (!htmlContent) return '';\n  \n  let cleaned = htmlContent\n    .replace(/<script[^>]*>.*?<\\/script>/gis, '')\n    .replace(/<style[^>]*>.*?<\\/style>/gis, '')\n    .replace(/<\\/?[^>]+(>|$)/g, ' ')\n    .replace(/&nbsp;/g, ' ')\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&quot;/g, '\"')\n    .replace(/&#39;/g, \"'\")\n    .replace(/\\s+/g, ' ')\n    .trim();\n  \n  const paragraphs = cleaned.split(/\\.\\s+(?=[A-Z])/).filter(p => p.trim().length > 50);\n  const selectedParagraphs = paragraphs.slice(0, maxParagraphs).join('. ');\n  \n  return selectedParagraphs.substring(0, 1200) + (selectedParagraphs.length > 1200 ? '...' : '');\n}\n\n// Procesar cada artículo\nconst processedArticles = rawArticles.map(article => {\n  const content = article.content?.rendered || article.excerpt?.rendered || '';\n  const extractedContent = extractFirstParagraphs(content, 3);\n  \n  return {\n    title: article.title?.rendered || 'Sin título',\n    url: article.link || article.guid?.rendered || '',\n    date: article.date || new Date().toISOString(),\n    excerpt_for_ai: extractedContent,\n    word_count: extractedContent.split(/\\s+/).length,\n    author: article._embedded?.author?.[0]?.name || 'Desconocido'\n  };\n}).filter(article => article.word_count > 20);\n\nreturn {\n  json: {\n    ...siteData,\n    articles: processedArticles,\n    total_articles: processedArticles.length,\n    has_content: processedArticles.length > 0,\n    processing_step: processedArticles.length > 0 ? 'CONTENT_EXTRACTED' : 'NO_VALID_CONTENT'\n  }\n};"
+      },
+      "id": "extract-clean-content",
+      "name": "Extraer y Limpiar Contenido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-content-check",
+              "leftValue": "={{ $json.has_content }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-has-content",
+      "name": "Tiene Artículos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retornar resultado de sitio sin contenido nuevo\nconst siteData = $input.item.json;\nconst executionTime = Date.now() - siteData.start_time;\n\nreturn {\n  json: {\n    site_domain: siteData.site_domain,\n    Sitio_URL: siteData.Sitio_URL,\n    status: 'SKIPPED',\n    error_type: 'NO_NEW_CONTENT',\n    error_message: `No hay artículos nuevos en los últimos ${siteData.Lookback_Days || 30} días`,\n    articles_processed: 0,\n    execution_time_ms: executionTime\n  }\n};"
+      },
+      "id": "return-no-content",
+      "name": "Return No Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 350],
+      "notes": "Sitio sin artículos nuevos - no es error"
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $('Get AI Workflow ID').item.json.ai_workflow_id }}",
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "name": "articles",
+              "value": "={{ JSON.stringify($json.articles) }}"
+            },
+            {
+              "name": "siteDomain",
+              "value": "={{ $json.site_domain }}"
+            }
+          ]
+        }
+      },
+      "id": "execute-ai-insights",
+      "name": "Execute: Generate AI Insights",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [1650, 100],
+      "notes": "Llama al subworkflow de AI para generar insights",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validar respuesta del subworkflow de AI\nconst aiResponse = $input.item.json;\nconst siteData = $input.first().json;\n\n// Verificar si hubo error en el subworkflow de AI\nif (aiResponse.error || aiResponse.status === 'FAILED') {\n  // AI falló, usar insights genéricos\n  const articlesWithGenericInsights = siteData.articles.map(article => ({\n    title: article.title,\n    url: article.url,\n    date: article.date,\n    insight: `Contenido relevante sobre ${siteData.site_domain}. Consulte el artículo completo para más detalles.`\n  }));\n  \n  return {\n    json: {\n      ...siteData,\n      processed_articles: articlesWithGenericInsights,\n      insights_count: articlesWithGenericInsights.length,\n      ai_success: false,\n      ai_fallback_used: true,\n      processing_step: 'AI_FALLBACK'\n    }\n  };\n}\n\n// AI exitoso\nreturn {\n  json: {\n    ...siteData,\n    processed_articles: aiResponse.processed_articles || [],\n    insights_count: aiResponse.insights_count || 0,\n    ai_success: true,\n    ai_fallback_used: false,\n    ai_execution_time_ms: aiResponse.execution_time_ms || 0,\n    processing_step: 'AI_SUCCESS'\n  }\n};"
+      },
+      "id": "validate-ai-response",
+      "name": "Validar Respuesta AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construir el archivo llms.txt completo\nconst siteData = $input.item.json;\nconst processedArticles = siteData.processed_articles || [];\nconst siteDomain = siteData.site_domain;\nconst siteUrl = siteData.Sitio_URL;\n\n// Header del archivo\nconst header = `# ${siteDomain}\n\n> Portal de Infraestructura y Logística - Insights de Impacto para Deep Research\n> Actualizado: ${new Date().toISOString().split('T')[0]}\n> Artículos procesados: ${processedArticles.length}\n> IA utilizada: ${siteData.ai_fallback_used ? 'Fallback genérico' : 'Claude/Gemini'}\n\n## Recursos principales\n\n- Sitio web: ${siteUrl}\n- RSS Feed: ${siteUrl}/feed/\n- API: ${siteUrl}/wp-json/wp/v2/\n\n---\n\n## Insights de Impacto Recientes\n\n`;\n\n// Sección de artículos\nconst articlesSection = processedArticles.map((article, index) => {\n  return `### ${index + 1}. [${article.title}](${article.url})\n\n**Insight:** ${article.insight}\n\n**Fecha:** ${new Date(article.date).toISOString().split('T')[0]}\n\n**URL:** ${article.url}\n\n---\n`;\n}).join('\\n');\n\n// Footer\nconst footer = `\n## Sobre este archivo\n\nEste archivo llms.txt ha sido generado automáticamente para optimizar la recuperación de información por modelos de lenguaje de gran escala (LLMs).\n\n**Objetivos:**\n- Investigación profunda (Deep Research)\n- Análisis de inversiones en infraestructura\n- Inteligencia de mercado logístico\n- Toma de decisiones basada en datos\n\n**Metodología:**\nExtracción automática de métricas clave, cifras financieras y análisis de impacto mediante AI.\n\n**Actualización:**\nEste archivo se regenera automáticamente cada ${siteData.Lookback_Days || 30} días.\n\n**Procesamiento:**\n- Sistema: n8n Community Edition v2.0\n- Última ejecución: ${new Date().toISOString()}\n- Artículos analizados: ${processedArticles.length}\n\n**Contacto:**\nPara más información, visite ${siteUrl}\n\n---\n\n*Generado automáticamente por LLMS.txt Auto-Updater*\n`;\n\n// Archivo completo\nconst llmsTxtContent = header + articlesSection + footer;\nconst fileSize = Buffer.from(llmsTxtContent, 'utf-8').length;\n\nreturn {\n  json: {\n    ...siteData,\n    llms_txt_content: llmsTxtContent,\n    file_size: fileSize,\n    processing_step: 'LLMS_TXT_BUILT'\n  }\n};"
+      },
+      "id": "build-llms-txt",
+      "name": "Construir llms.txt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2050, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Upload dinámico vía sFTP usando ssh2-sftp-client\n// NOTA: Requiere 'npm install ssh2-sftp-client' en servidor n8n\n\nconst SftpClient = require('ssh2-sftp-client');\nconst sftp = new SftpClient();\n\nconst siteData = $input.item.json;\n\nconst config = {\n  host: siteData.sFTP_Host,\n  port: 22,\n  username: siteData.sFTP_User,\n  password: siteData.sFTP_Pass,\n  readyTimeout: 20000,\n  retries: 2,\n  retry_factor: 2,\n  retry_minTimeout: 2000\n};\n\nconst remotePath = '/public_html/llms.txt';\nconst localContent = Buffer.from(siteData.llms_txt_content, 'utf-8');\n\ntry {\n  await sftp.connect(config);\n  \n  // Verificar directorio\n  const remoteDir = remotePath.substring(0, remotePath.lastIndexOf('/'));\n  const dirExists = await sftp.exists(remoteDir);\n  if (!dirExists) {\n    await sftp.mkdir(remoteDir, true);\n  }\n  \n  // Subir archivo\n  await sftp.put(localContent, remotePath);\n  \n  // Verificar upload\n  const fileInfo = await sftp.stat(remotePath);\n  \n  await sftp.end();\n  \n  return {\n    json: {\n      ...siteData,\n      upload_status: 'SUCCESS',\n      sftp_success: true,\n      uploaded_file_size: fileInfo.size,\n      processing_step: 'UPLOAD_SUCCESS'\n    }\n  };\n  \n} catch (error) {\n  try { await sftp.end(); } catch (e) {}\n  \n  return {\n    json: {\n      ...siteData,\n      upload_status: 'FAILED',\n      sftp_success: false,\n      sftp_error: true,\n      error_message: error.message,\n      error_code: error.code || 'SFTP_ERROR',\n      processing_step: 'UPLOAD_FAILED'\n    }\n  };\n}"
+      },
+      "id": "sftp-upload",
+      "name": "sFTP Upload (Dynamic)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2250, 100],
+      "continueOnFail": true,
+      "notes": "Requiere: npm install ssh2-sftp-client"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "sftp-success-check",
+              "leftValue": "={{ $json.sftp_success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-sftp-success",
+      "name": "Upload Exitoso?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2450, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retornar resultado exitoso al workflow principal\nconst siteData = $input.item.json;\nconst executionTime = Date.now() - siteData.start_time;\n\nreturn {\n  json: {\n    site_domain: siteData.site_domain,\n    Sitio_URL: siteData.Sitio_URL,\n    status: 'SUCCESS',\n    articles_processed: siteData.insights_count || 0,\n    file_size: siteData.file_size || 0,\n    insights_count: siteData.insights_count || 0,\n    upload_status: 'SUCCESS',\n    ai_fallback_used: siteData.ai_fallback_used || false,\n    execution_time_ms: executionTime,\n    llms_txt_url: `${siteData.Sitio_URL}/llms.txt`\n  }\n};"
+      },
+      "id": "return-success",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2650, 50]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retornar resultado con fallo de upload\nconst siteData = $input.item.json;\nconst executionTime = Date.now() - siteData.start_time;\n\nreturn {\n  json: {\n    site_domain: siteData.site_domain,\n    Sitio_URL: siteData.Sitio_URL,\n    status: 'FAILED',\n    error_type: 'SFTP_ERROR',\n    error_message: siteData.error_message || 'Error al subir archivo vía sFTP',\n    sftp_error: true,\n    articles_processed: siteData.insights_count || 0,\n    file_size: siteData.file_size || 0,\n    execution_time_ms: executionTime\n  }\n};"
+      },
+      "id": "return-sftp-error",
+      "name": "Return sFTP Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2650, 150]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ai-workflow-id",
+              "name": "ai_workflow_id",
+              "value": "GENERATE_INSIGHTS_WORKFLOW_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-ai-workflow-id",
+      "name": "Get AI Workflow ID",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [1450, 50],
+      "notes": "CONFIGURAR: ID del subworkflow de AI"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Site Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Site Data": {
+      "main": [
+        [
+          {
+            "node": "WordPress API - Fetch Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WordPress API - Fetch Posts": {
+      "main": [
+        [
+          {
+            "node": "Validar Respuesta WP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Respuesta WP": {
+      "main": [
+        [
+          {
+            "node": "API Call OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API Call OK?": {
+      "main": [
+        [
+          {
+            "node": "Extraer y Limpiar Contenido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return API Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer y Limpiar Contenido": {
+      "main": [
+        [
+          {
+            "node": "Tiene Artículos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tiene Artículos?": {
+      "main": [
+        [
+          {
+            "node": "Execute: Generate AI Insights",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return No Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute: Generate AI Insights": {
+      "main": [
+        [
+          {
+            "node": "Validar Respuesta AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Respuesta AI": {
+      "main": [
+        [
+          {
+            "node": "Construir llms.txt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir llms.txt": {
+      "main": [
+        [
+          {
+            "node": "sFTP Upload (Dynamic)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sFTP Upload (Dynamic)": {
+      "main": [
+        [
+          {
+            "node": "Upload Exitoso?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Exitoso?": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return sFTP Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get AI Workflow ID": {
+      "main": [
+        [
+          {
+            "node": "Execute: Generate AI Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "2.0",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "n8n-community-edition"
+  },
+  "id": "llms-txt-process-site",
+  "tags": [
+    {
+      "id": "subworkflow",
+      "name": "subworkflow"
+    }
+  ]
+}

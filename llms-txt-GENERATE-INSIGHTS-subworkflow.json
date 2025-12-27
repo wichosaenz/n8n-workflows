@@ -1,0 +1,211 @@
+{
+  "name": "LLMS.txt SUBWORKFLOW - Generate AI Insights",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-execute-workflow-ai",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsear artículos recibidos del subworkflow de procesamiento de sitio\nconst articlesStr = $input.item.json.articles;\nconst articles = typeof articlesStr === 'string' ? JSON.parse(articlesStr) : articlesStr;\nconst siteDomain = $input.item.json.siteDomain || 'unknown';\n\nconst startTime = Date.now();\n\n// Devolver array de artículos para procesar\nreturn articles.map((article, index) => ({\n  json: {\n    article_index: index,\n    total_articles: articles.length,\n    site_domain: siteDomain,\n    current_article: article,\n    start_time: startTime\n  }\n}));"
+      },
+      "id": "parse-articles",
+      "name": "Parse Articles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-articles",
+      "name": "Split Articles (1 por vez)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [650, 300],
+      "notes": "Procesa artículos uno por uno para mejor manejo de errores"
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $credentials.anthropicApiKey }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-3-5-haiku-20241022\",\n  \"max_tokens\": 300,\n  \"temperature\": 0.3,\n  \"system\": \"Actúa como un Analista de Inteligencia de Inversiones especializado en infraestructura y logística.\\n\\nEXTRAE únicamente:\\n- Montos de inversión (USD, millones, miles de millones)\\n- Porcentajes de mejora, reducción o crecimiento\\n- Plazos, fechas clave y periodos\\n- Número de beneficiarios, usuarios o empresas\\n- Métricas operativas (capacidad, tiempo, volumen, toneladas)\\n\\nFORMATO de salida (máximo 250 caracteres):\\n[CIFRA PRINCIPAL] + [IMPACTO] + [CONTEXTO]\\n\\nEJEMPLO:\\n'Inversión de $120M aumentará capacidad portuaria 40% para 2026. Reducción de tiempos de espera de 8 a 5 horas. Impacto: 1,500 exportadores.'\\n\\nNO escribas introducciones como 'El artículo menciona que...'. Inicia DIRECTAMENTE con datos numéricos.\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Analiza este contenido y extrae el insight más impactante:\\n\\nTítulo: {{ $json.current_article.title }}\\n\\nContenido:\\n{{ $json.current_article.excerpt_for_ai }}\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 30000,
+          "retry": {
+            "retry": {
+              "maxRetries": 2,
+              "retryInterval": 3000
+            }
+          }
+        }
+      },
+      "id": "anthropic-ai-call",
+      "name": "Anthropic - Generate Insight",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 300],
+      "continueOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic API"
+        }
+      },
+      "notes": "Cambiar a Groq/Gemini si prefieres"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Procesar respuesta de AI con manejo de errores\nconst response = $input.item.json;\nconst articleData = $input.first().json;\nconst article = articleData.current_article;\n\nlet insight = '';\nlet aiSuccess = true;\nlet aiError = false;\nlet errorMessage = '';\n\n// Verificar si hubo error en la llamada AI\nif (response.error || !response.content) {\n  aiSuccess = false;\n  aiError = true;\n  errorMessage = response.error?.message || 'AI API no retornó respuesta válida';\n  \n  // Fallback: insight genérico basado en el título\n  const domain = articleData.site_domain;\n  insight = `Contenido relevante sobre infraestructura y logística en ${domain}. Consulte el artículo completo para detalles específicos.`;\n} else {\n  // Parsear respuesta exitosa de Anthropic\n  try {\n    if (response.content && Array.isArray(response.content) && response.content.length > 0) {\n      insight = response.content[0].text || '';\n      insight = insight.trim().substring(0, 250);\n      \n      // Asegurar que termine apropiadamente si fue cortado\n      if (insight.length === 250 && !insight.endsWith('.')) {\n        insight = insight.substring(0, 247) + '...';\n      }\n    } else {\n      throw new Error('Formato de respuesta inesperado');\n    }\n  } catch (e) {\n    aiSuccess = false;\n    aiError = true;\n    errorMessage = e.message;\n    insight = `Análisis de ${article.title.substring(0, 100)}. Ver artículo completo para más información.`;\n  }\n}\n\n// Validar calidad del insight\nconst hasNumbers = /\\d+/.test(insight);\nconst hasPercentage = /%/.test(insight);\nconst hasCurrency = /\\$|USD|EUR|MXN/.test(insight);\nconst notGeneric = !/artículo|contenido|habla sobre|menciona que/i.test(insight);\n\nlet qualityScore = 0;\nif (hasNumbers) qualityScore += 25;\nif (hasPercentage) qualityScore += 25;\nif (hasCurrency) qualityScore += 25;\nif (notGeneric) qualityScore += 25;\n\nreturn {\n  json: {\n    ...articleData,\n    processed_article: {\n      title: article.title,\n      url: article.url,\n      date: article.date,\n      insight: insight,\n      quality_score: qualityScore\n    },\n    ai_success: aiSuccess,\n    ai_error: aiError,\n    ai_error_message: errorMessage\n  }\n};"
+      },
+      "id": "process-ai-response",
+      "name": "Procesar Respuesta AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "seconds"
+      },
+      "id": "wait-between-articles",
+      "name": "Wait 1s (AI Rate Limit)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1250, 300],
+      "webhookId": "ai-rate-limit"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Acumular todos los artículos procesados\nconst allItems = $input.all();\nconst processedArticles = allItems.map(item => item.json.processed_article);\n\n// Estadísticas de procesamiento AI\nconst totalArticles = processedArticles.length;\nconst aiErrors = allItems.filter(item => item.json.ai_error).length;\nconst avgQualityScore = processedArticles.reduce((sum, a) => sum + (a.quality_score || 0), 0) / totalArticles;\n\nconst startTime = allItems[0].json.start_time;\nconst executionTime = Date.now() - startTime;\n\nreturn {\n  json: {\n    processed_articles: processedArticles,\n    insights_count: totalArticles,\n    ai_errors_count: aiErrors,\n    avg_quality_score: Math.round(avgQualityScore),\n    execution_time_ms: executionTime,\n    status: 'SUCCESS'\n  }\n};"
+      },
+      "id": "accumulate-results",
+      "name": "Acumular Resultados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 500],
+      "notes": "Se ejecuta cuando terminan todos los artículos"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Articles": {
+      "main": [
+        [
+          {
+            "node": "Split Articles (1 por vez)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Articles (1 por vez)": {
+      "main": [
+        [
+          {
+            "node": "Anthropic - Generate Insight",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Acumular Resultados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic - Generate Insight": {
+      "main": [
+        [
+          {
+            "node": "Procesar Respuesta AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar Respuesta AI": {
+      "main": [
+        [
+          {
+            "node": "Wait 1s (AI Rate Limit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 1s (AI Rate Limit)": {
+      "main": [
+        [
+          {
+            "node": "Split Articles (1 por vez)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "2.0",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "n8n-community-edition"
+  },
+  "id": "llms-txt-generate-insights",
+  "tags": [
+    {
+      "id": "subworkflow",
+      "name": "subworkflow"
+    }
+  ]
+}

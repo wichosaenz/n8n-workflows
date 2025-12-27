@@ -1,0 +1,4 @@
+Sitio_URL,WP_API_Key,sFTP_Host,sFTP_User,sFTP_Pass,Lookback_Days
+https://infraestructura-ejemplo1.com,wp_abc123def456ghi789,ftp.infraestructura-ejemplo1.com,deploy,SecurePass123!,30
+https://logistica-ejemplo2.com,wp_jkl012mno345pqr678,sftp.logistica-ejemplo2.com,ftpuser,AnotherPass456!,45
+https://transporte-ejemplo3.com,wp_stu901vwx234yzab567,192.168.1.100,admin,ThirdPass789!,60
