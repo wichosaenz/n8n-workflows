@@ -1,8 +1,8 @@
 # WP Subscribers Manager
 
-Plugin de WordPress para gestionar una lista de suscriptores con base de datos MySQL personalizada en Dreamhost.
+Plugin de WordPress para gestionar una lista de suscriptores con base de datos PostgreSQL personalizada.
 
-**Versión:** 1.4.0
+**Versión:** 1.5.0
 **Autor:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
 
@@ -10,11 +10,17 @@ Plugin de WordPress para gestionar una lista de suscriptores con base de datos M
 
 ## 📋 Descripción
 
-WP Subscribers Manager es un plugin completo para WordPress que te permite crear y gestionar una lista de suscriptores utilizando una base de datos MySQL personalizada alojada en Dreamhost. El plugin ofrece un formulario de suscripción totalmente personalizable que se adapta al estilo de tu tema.
+WP Subscribers Manager es un plugin completo para WordPress que te permite crear y gestionar una lista de suscriptores utilizando una base de datos PostgreSQL personalizada. El plugin ofrece un formulario de suscripción totalmente personalizable que se adapta al estilo de tu tema.
 
 ### Características Principales
 
-✅ Conexión a base de datos MySQL personalizada en Dreamhost
+✅ **NUEVO v1.5.0:** 🐘 Migración completa a PostgreSQL (antes MySQL)
+✅ **NUEVO v1.5.0:** 🔒 PDO con prepared statements para máxima seguridad
+✅ **NUEVO v1.5.0:** ⚡ Optimización de rendimiento con triggers PostgreSQL
+✅ **NUEVO v1.5.0:** 📁 Scripts SQL completos incluidos para instalación
+✅ **NUEVO v1.5.0:** 🔧 Campo de puerto configurable (5432 por defecto)
+✅ **NUEVO v1.5.0:** 📚 Documentación extensa de PostgreSQL incluida
+✅ Conexión a base de datos PostgreSQL personalizada
 ✅ Configuración completa de parámetros de conexión
 ✅ Labels personalizables para soporte multiidioma (español/inglés)
 ✅ Formulario adaptable al CSS del tema activo
@@ -24,12 +30,12 @@ WP Subscribers Manager es un plugin completo para WordPress que te permite crear
 ✅ Interfaz de administración intuitiva
 ✅ Envío de formulario con AJAX (sin recargar página)
 ✅ Responsive y compatible con dispositivos móviles
-✅ **NUEVO v1.4.0:** 📧 Notificaciones automáticas por email (SMTP)
-✅ **NUEVO v1.4.0:** 📬 Configuración SMTP completa (Gmail, Dreamhost, Office365, etc.)
-✅ **NUEVO v1.4.0:** 📨 Emails HTML profesionales con detalles del suscriptor
-✅ **NUEVO v1.4.0:** ✉️ Múltiples destinatarios de notificaciones (separados por comas)
-✅ **NUEVO v1.4.0:** ✅ Botón de "Enviar Email de Prueba" para verificar configuración
-✅ **NUEVO v1.4.0:** 🔔 Activar/desactivar notificaciones fácilmente
+✅ v1.4.0: 📧 Notificaciones automáticas por email (SMTP)
+✅ v1.4.0: 📬 Configuración SMTP completa (Gmail, Dreamhost, Office365, etc.)
+✅ v1.4.0: 📨 Emails HTML profesionales con detalles del suscriptor
+✅ v1.4.0: ✉️ Múltiples destinatarios de notificaciones (separados por comas)
+✅ v1.4.0: ✅ Botón de "Enviar Email de Prueba" para verificar configuración
+✅ v1.4.0: 🔔 Activar/desactivar notificaciones fácilmente
 ✅ v1.3.3: Simplificación de lista de suscriptores con carga instantánea
 ✅ v1.3.1: Internacionalización completa (i18n) con detección automática de idioma
 ✅ v1.3.1: Traducción al inglés incluida (en_US)
@@ -66,24 +72,49 @@ WP Subscribers Manager es un plugin completo para WordPress que te permite crear
 
 ## ⚙️ Configuración
 
-### 1. Configurar Base de Datos
+### 1. Configurar Base de Datos PostgreSQL
 
-Después de activar el plugin:
+**IMPORTANTE:** Antes de configurar el plugin en WordPress, debes preparar tu base de datos PostgreSQL.
+
+#### Paso 1: Preparar PostgreSQL
+
+Ejecuta los scripts SQL incluidos en la carpeta `/sql-postgresql/`:
+
+```bash
+# 1. Conectarse a PostgreSQL como superusuario
+psql -U postgres
+
+# 2. Ejecutar el script de creación de BD y usuario
+\i /ruta/a/sql-postgresql/00-crear-base-datos.sql
+
+# 3. Conectarse con el nuevo usuario
+psql -U wp_subscribers_user -d wp_subscribers
+
+# 4. Ejecutar el script de creación de tabla
+\i /ruta/a/sql-postgresql/01-crear-tabla-subscribers.sql
+```
+
+Ver documentación completa en `/sql-postgresql/README-SQL.md`
+
+#### Paso 2: Configurar Plugin en WordPress
+
+Después de preparar la base de datos:
 
 1. Ve a **Suscriptores** en el menú de administración de WordPress
-2. Completa la sección **Configuración de Base de Datos**:
-   - **Host de Base de Datos**: El hostname de tu servidor MySQL en Dreamhost (ej: `mysql.example.dreamhosters.com`)
-   - **Nombre de Base de Datos**: El nombre de tu base de datos
-   - **Usuario de Base de Datos**: Tu usuario de MySQL
+2. Completa la sección **Configuración de Base de Datos PostgreSQL**:
+   - **Host de Base de Datos**: El hostname de tu servidor PostgreSQL (ej: `localhost`, `192.168.1.100`, `postgres.ejemplo.com`)
+   - **Puerto PostgreSQL**: Puerto de conexión (por defecto: `5432`)
+   - **Nombre de Base de Datos**: El nombre de tu base de datos (ej: `wp_subscribers`)
+   - **Usuario de Base de Datos**: Tu usuario de PostgreSQL (ej: `wp_subscribers_user`)
    - **Contraseña de Base de Datos**: La contraseña de tu usuario
    - **Nombre de Tabla**: El nombre de la tabla donde se guardarán los suscriptores (por defecto: `subscribers`)
 
 3. Haz clic en **Probar Conexión** para verificar que los datos sean correctos
 4. Haz clic en **Guardar Configuración**
 
-> **Nota:** El plugin creará automáticamente la tabla en tu base de datos si no existe.
+> **Nota:** El plugin puede crear automáticamente la tabla si el usuario tiene permisos CREATE TABLE, pero se recomienda usar los scripts SQL incluidos.
 
-> **Alternativa:** También puedes crear la tabla manualmente usando los scripts SQL proporcionados en la carpeta `/sql/`. Ver sección [📊 Scripts SQL](#-scripts-sql) más abajo.
+> **Scripts SQL:** Ver carpeta `/sql-postgresql/` para todos los scripts de creación, datos de ejemplo, consultas útiles y mantenimiento.
 
 ### 2. Configurar Etiquetas (Labels)
 
@@ -673,7 +704,7 @@ wp-subscribers-plugin/
 
 **Desarrollador:** Wicho Saenz
 **Sitio Web:** [www.wichosaenz.com](https://www.wichosaenz.com)
-**Versión:** 1.4.0
+**Versión:** 1.5.0
 
 ---
 
@@ -684,6 +715,51 @@ Este plugin está licenciado bajo GPL v2 o posterior.
 ---
 
 ## 🔄 Changelog
+
+### Versión 1.5.0 (2025) 🐘
+
+**Migración completa a PostgreSQL** - Cambio de motor de base de datos de MySQL a PostgreSQL para mayor escalabilidad, rendimiento y características avanzadas.
+
+#### Cambios Principales:
+- 🐘 **PostgreSQL como motor de BD**: Migración completa de MySQL/MySQLi a PostgreSQL con PDO
+- 🔒 **Prepared Statements**: Uso de PDO con prepared statements para máxima seguridad contra SQL injection
+- 🔧 **Campo de puerto configurable**: Nuevo campo "Puerto PostgreSQL" en panel de administración (por defecto 5432)
+- ⚡ **Triggers automáticos**: Sistema de triggers PostgreSQL para actualización automática de `updated_date`
+- 🎯 **Funciones PL/pgSQL**: Funciones en PostgreSQL para automatización de timestamps
+- 📊 **Tipos de datos optimizados**: Uso de `SERIAL` (autoincremento), `TIMESTAMP`, `VARCHAR`, `TEXT`
+- 🔄 **Operador de concatenación**: Cambio de `CONCAT()` a `||` (operador nativo de PostgreSQL)
+- 🚀 **Índices optimizados**: Recreación de todos los índices específicamente para PostgreSQL
+
+#### Scripts SQL PostgreSQL:
+- 📁 **Nueva carpeta**: `/sql-postgresql/` con todos los scripts adaptados
+- 📄 `00-crear-base-datos.sql`: Creación de BD, usuario y permisos
+- 📄 `01-crear-tabla-subscribers.sql`: Tabla principal con índices y triggers
+- 📄 `02-datos-de-ejemplo.sql`: 20 registros de ejemplo para pruebas
+- 📄 `03-consultas-utiles.sql`: +50 consultas útiles para administración
+- 📄 `04-mantenimiento-optimizacion.sql`: VACUUM, ANALYZE, REINDEX, backups
+- 📖 `README-SQL.md`: Documentación completa de instalación y configuración
+
+#### Cambios Técnicos:
+- 🔨 **class-database.php**: Reescritura completa con PDO en lugar de MySQLi
+- 🔨 **class-admin.php**: Actualizado para agregar campo de puerto y textos de PostgreSQL
+- 🔨 **wp-subscribers.php**: Versión actualizada a 1.5.0
+- 📝 **README.md**: Documentación actualizada con instrucciones de PostgreSQL
+- 🔐 **Conexión segura**: DSN con opciones de encoding UTF8
+- ⚙️ **Error handling**: Manejo mejorado de excepciones PDO específicas de PostgreSQL
+
+#### Compatibilidad:
+- ✅ **PostgreSQL 12+**: Compatible con todas las versiones modernas de PostgreSQL
+- ✅ **PHP 7.4+**: Requiere extensión PDO_PGSQL habilitada
+- ✅ **WordPress 5.0+**: Mantiene compatibilidad con versiones recientes de WordPress
+- ⚠️ **Migración desde MySQL**: Ver scripts de migración en `/sql-postgresql/`
+
+#### Beneficios de PostgreSQL:
+- 🎯 **ACID completo**: Transacciones más confiables
+- 📈 **Mejor rendimiento**: Optimización para consultas complejas
+- 🔍 **JSON nativo**: Soporte para tipos de datos avanzados
+- 🌐 **Escalabilidad**: Mejor manejo de grandes volúmenes de datos
+- 🛡️ **Seguridad robusta**: Sistema de permisos granular
+- 🔄 **Replicación avanzada**: Soporte nativo para alta disponibilidad
 
 ### Versión 1.4.0 (2024) 📧
 - 🆕 **Notificaciones automáticas por email**: Recibe un email cada vez que alguien se suscriba

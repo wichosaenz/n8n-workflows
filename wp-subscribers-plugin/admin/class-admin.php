@@ -49,8 +49,9 @@ class WP_Subscribers_Admin {
     public function sanitize_settings($input) {
         $sanitized = array();
 
-        // Sanitizar configuración de base de datos
+        // Sanitizar configuración de base de datos PostgreSQL
         $sanitized['db_host'] = isset($input['db_host']) ? sanitize_text_field($input['db_host']) : '';
+        $sanitized['db_port'] = isset($input['db_port']) ? absint($input['db_port']) : 5432;
         $sanitized['db_name'] = isset($input['db_name']) ? sanitize_text_field($input['db_name']) : '';
         $sanitized['db_user'] = isset($input['db_user']) ? sanitize_text_field($input['db_user']) : '';
         $sanitized['db_password'] = isset($input['db_password']) ? $input['db_password'] : '';
@@ -151,6 +152,7 @@ class WP_Subscribers_Admin {
 
             $settings = array(
                 'db_host' => sanitize_text_field($_POST['db_host']),
+                'db_port' => isset($_POST['db_port']) ? absint($_POST['db_port']) : 5432,
                 'db_name' => sanitize_text_field($_POST['db_name']),
                 'db_user' => sanitize_text_field($_POST['db_user']),
                 'db_password' => $_POST['db_password'],
@@ -194,9 +196,9 @@ class WP_Subscribers_Admin {
 
                     <!-- Configuración de Base de Datos -->
                     <div class="wp-subscribers-section">
-                        <h2><?php _e('Configuración de Base de Datos', 'wp-subscribers'); ?></h2>
+                        <h2><?php _e('Configuración de Base de Datos PostgreSQL', 'wp-subscribers'); ?></h2>
                         <p class="description">
-                            <?php _e('Configura los parámetros de conexión a tu base de datos MySQL en Dreamhost.', 'wp-subscribers'); ?>
+                            <?php _e('Configura los parámetros de conexión a tu base de datos PostgreSQL.', 'wp-subscribers'); ?>
                         </p>
 
                         <table class="form-table">
@@ -211,10 +213,30 @@ class WP_Subscribers_Admin {
                                         name="db_host"
                                         value="<?php echo esc_attr(isset($settings['db_host']) ? $settings['db_host'] : ''); ?>"
                                         class="regular-text"
-                                        placeholder="mysql.example.dreamhosters.com"
+                                        placeholder="localhost"
                                     />
                                     <p class="description">
-                                        <?php _e('Ejemplo: mysql.example.dreamhosters.com', 'wp-subscribers'); ?>
+                                        <?php _e('Ejemplo: localhost, 192.168.1.100, postgres.example.com', 'wp-subscribers'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="db_port"><?php _e('Puerto PostgreSQL', 'wp-subscribers'); ?></label>
+                                </th>
+                                <td>
+                                    <input
+                                        type="number"
+                                        id="db_port"
+                                        name="db_port"
+                                        value="<?php echo esc_attr(isset($settings['db_port']) ? $settings['db_port'] : '5432'); ?>"
+                                        class="small-text"
+                                        placeholder="5432"
+                                        min="1"
+                                        max="65535"
+                                    />
+                                    <p class="description">
+                                        <?php _e('Puerto por defecto de PostgreSQL: 5432', 'wp-subscribers'); ?>
                                     </p>
                                 </td>
                             </tr>
