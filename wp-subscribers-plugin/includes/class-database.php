@@ -1,6 +1,7 @@
 <?php
 /**
- * Clase para manejar la conexión a la base de datos personalizada
+ * Clase para manejar la conexión a la base de datos PostgreSQL
+ * Versión 1.5.0 - Migrado de MySQL a PostgreSQL
  */
 
 if (!defined('ABSPATH')) {
@@ -27,7 +28,7 @@ class WP_Subscribers_Database {
     }
 
     /**
-     * Obtener conexión a la base de datos
+     * Obtener conexión a la base de datos PostgreSQL
      */
     public function get_connection() {
         if ($this->connection !== null) {
@@ -42,22 +43,31 @@ class WP_Subscribers_Database {
         }
 
         try {
-            $this->connection = new mysqli(
+            // Puerto por defecto de PostgreSQL
+            $port = isset($this->settings['db_port']) ? intval($this->settings['db_port']) : 5432;
+
+            // Construir DSN para PostgreSQL
+            $dsn = sprintf(
+                'pgsql:host=%s;port=%d;dbname=%s;options=\'--client_encoding=UTF8\'',
                 $this->settings['db_host'],
-                $this->settings['db_user'],
-                $this->settings['db_password'],
+                $port,
                 $this->settings['db_name']
             );
 
-            if ($this->connection->connect_error) {
-                error_log('WP Subscribers DB Error: ' . $this->connection->connect_error);
-                return false;
-            }
+            // Crear conexión PDO
+            $this->connection = new PDO(
+                $dsn,
+                $this->settings['db_user'],
+                $this->settings['db_password'],
+                array(
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES => false
+                )
+            );
 
-            $this->connection->set_charset('utf8mb4');
-
-        } catch (Exception $e) {
-            error_log('WP Subscribers DB Exception: ' . $e->getMessage());
+        } catch (PDOException $e) {
+            error_log('WP Subscribers PostgreSQL Error: ' . $e->getMessage());
             return false;
         }
 
@@ -74,10 +84,6 @@ class WP_Subscribers_Database {
             return array('success' => false, 'message' => 'error_connection');
         }
 
-        // Sanitizar datos
-        $name = $connection->real_escape_string(sanitize_text_field($name));
-        $email = $connection->real_escape_string(sanitize_email($email));
-
         // Validar email
         if (!is_email($email)) {
             return array('success' => false, 'message' => 'error_invalid_email');
@@ -88,17 +94,26 @@ class WP_Subscribers_Database {
             return array('success' => false, 'message' => 'duplicate');
         }
 
-        // Obtener URL del sitio web actual (para múltiples sitios)
-        $website_url = $connection->real_escape_string(esc_url(home_url()));
+        try {
+            // Obtener URL del sitio web actual (para múltiples sitios)
+            $website_url = esc_url(home_url());
+            $table = $this->settings['db_table'];
 
-        $table = $this->settings['db_table'];
-        $query = "INSERT INTO `{$table}` (name, email, subscribed_date, ip_address, website_url)
-                  VALUES ('{$name}', '{$email}', NOW(), '{$_SERVER['REMOTE_ADDR']}', '{$website_url}')";
+            $query = "INSERT INTO {$table} (name, email, subscribed_date, ip_address, website_url)
+                      VALUES (:name, :email, NOW(), :ip_address, :website_url)";
 
-        if ($connection->query($query)) {
+            $stmt = $connection->prepare($query);
+            $stmt->execute(array(
+                ':name' => sanitize_text_field($name),
+                ':email' => sanitize_email($email),
+                ':ip_address' => $_SERVER['REMOTE_ADDR'],
+                ':website_url' => $website_url
+            ));
+
             return array('success' => true, 'message' => 'success');
-        } else {
-            error_log('WP Subscribers Insert Error: ' . $connection->error);
+
+        } catch (PDOException $e) {
+            error_log('WP Subscribers Insert Error: ' . $e->getMessage());
             return array('success' => false, 'message' => 'error_database');
         }
     }
@@ -113,18 +128,20 @@ class WP_Subscribers_Database {
             return false;
         }
 
-        $email = $connection->real_escape_string(sanitize_email($email));
-        $table = $this->settings['db_table'];
+        try {
+            $table = $this->settings['db_table'];
+            $query = "SELECT COUNT(*) as count FROM {$table} WHERE email = :email";
 
-        $query = "SELECT COUNT(*) as count FROM `{$table}` WHERE email = '{$email}'";
-        $result = $connection->query($query);
+            $stmt = $connection->prepare($query);
+            $stmt->execute(array(':email' => sanitize_email($email)));
 
-        if ($result) {
-            $row = $result->fetch_assoc();
+            $row = $stmt->fetch();
             return $row['count'] > 0;
-        }
 
-        return false;
+        } catch (PDOException $e) {
+            error_log('WP Subscribers Check Error: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**
@@ -137,27 +154,61 @@ class WP_Subscribers_Database {
             return false;
         }
 
-        $table = $this->settings['db_table'];
+        try {
+            $table = $this->settings['db_table'];
 
-        $query = "CREATE TABLE IF NOT EXISTS `{$table}` (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            email VARCHAR(255) NOT NULL UNIQUE,
-            subscribed_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            ip_address VARCHAR(45),
-            status VARCHAR(20) DEFAULT 'active',
-            updated_date DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-            source VARCHAR(100) NULL,
-            website_url VARCHAR(255) NULL COMMENT 'URL del sitio WordPress (para múltiples sitios)',
-            notes TEXT NULL,
-            INDEX idx_email (email),
-            INDEX idx_status (status),
-            INDEX idx_subscribed_date (subscribed_date),
-            INDEX idx_status_date (status, subscribed_date),
-            INDEX idx_website_url (website_url(100))
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+            $query = "CREATE TABLE IF NOT EXISTS {$table} (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                subscribed_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                ip_address VARCHAR(45),
+                status VARCHAR(20) DEFAULT 'active',
+                updated_date TIMESTAMP NULL,
+                source VARCHAR(100) NULL,
+                website_url VARCHAR(255) NULL,
+                notes TEXT NULL
+            )";
 
-        return $connection->query($query);
+            $connection->exec($query);
+
+            // Crear índices
+            $indexes = array(
+                "CREATE INDEX IF NOT EXISTS idx_{$table}_email ON {$table} (email)",
+                "CREATE INDEX IF NOT EXISTS idx_{$table}_status ON {$table} (status)",
+                "CREATE INDEX IF NOT EXISTS idx_{$table}_subscribed_date ON {$table} (subscribed_date)",
+                "CREATE INDEX IF NOT EXISTS idx_{$table}_status_date ON {$table} (status, subscribed_date)",
+                "CREATE INDEX IF NOT EXISTS idx_{$table}_website_url ON {$table} (website_url)"
+            );
+
+            foreach ($indexes as $index_query) {
+                $connection->exec($index_query);
+            }
+
+            // Crear trigger para updated_date
+            $trigger = "CREATE OR REPLACE FUNCTION update_{$table}_timestamp()
+                        RETURNS TRIGGER AS $$
+                        BEGIN
+                            NEW.updated_date = CURRENT_TIMESTAMP;
+                            RETURN NEW;
+                        END;
+                        $$ LANGUAGE plpgsql;
+
+                        DROP TRIGGER IF EXISTS trigger_update_{$table}_timestamp ON {$table};
+
+                        CREATE TRIGGER trigger_update_{$table}_timestamp
+                        BEFORE UPDATE ON {$table}
+                        FOR EACH ROW
+                        EXECUTE FUNCTION update_{$table}_timestamp();";
+
+            $connection->exec($trigger);
+
+            return true;
+
+        } catch (PDOException $e) {
+            error_log('WP Subscribers Create Table Error: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**
@@ -175,130 +226,110 @@ class WP_Subscribers_Database {
             );
         }
 
-        // Intentar conexión con manejo de errores por capas
         try {
-            $conn = new mysqli(
+            // Puerto por defecto de PostgreSQL
+            $port = isset($this->settings['db_port']) ? intval($this->settings['db_port']) : 5432;
+
+            // Construir DSN para PostgreSQL
+            $dsn = sprintf(
+                'pgsql:host=%s;port=%d;dbname=%s;options=\'--client_encoding=UTF8\'',
                 $this->settings['db_host'],
-                $this->settings['db_user'],
-                $this->settings['db_password'],
+                $port,
                 $this->settings['db_name']
             );
 
-            // Verificar si hay error de conexión
-            if ($conn->connect_error) {
-                $codigo_error = $conn->connect_errno;
-                $mensaje_error_nativo = $conn->connect_error;
+            // Intentar conexión
+            $conn = new PDO(
+                $dsn,
+                $this->settings['db_user'],
+                $this->settings['db_password'],
+                array(
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+                )
+            );
 
-                $user_message = '';
-                $debug_message = '';
-
-                // Análisis por capas de error
-                switch ($codigo_error) {
-                    // CAPA 1: Red / Firewall / DNS
-                    case 2002: // Can't connect to server
-                    case 2003: // Can't connect to MySQL server
-                    case 2005: // Unknown MySQL server host
-                    case 2006: // MySQL server has gone away
-                        $user_message = "❌ Error de Red/Host: No se pudo contactar al servidor MySQL. Verifica:\n" .
-                                      "1. Que el 'Host' sea correcto (ej: mysql.tudominio.dreamhosters.com)\n" .
-                                      "2. Que tu IP esté autorizada en DreamHost (Panel > MySQL > Hostnames Allowed)\n" .
-                                      "3. Que el servidor MySQL esté activo";
-                        $debug_message = "Capa 1 (Red/Firewall/DNS): (Err: $codigo_error) $mensaje_error_nativo";
-                        break;
-
-                    // CAPA 2: Autenticación
-                    case 1045: // Access denied for user
-                        $user_message = "❌ Error de Autenticación: Usuario o contraseña incorrectos. Verifica:\n" .
-                                      "1. Que el 'Usuario' sea exacto (sensible a mayúsculas)\n" .
-                                      "2. Que la 'Contraseña' sea correcta\n" .
-                                      "3. Que el usuario tenga permisos en DreamHost";
-                        $debug_message = "Capa 2 (Autenticación): (Err: $codigo_error) $mensaje_error_nativo";
-                        break;
-
-                    // CAPA 3: Nombre de Base de Datos
-                    case 1049: // Unknown database
-                        $user_message = "❌ Error de Base de Datos: La base de datos no existe. Verifica:\n" .
-                                      "1. Que el 'Nombre de Base de Datos' sea exacto\n" .
-                                      "2. Que la base de datos exista en DreamHost (Panel > MySQL > Databases)\n" .
-                                      "3. Que el usuario tenga acceso a esta base de datos";
-                        $debug_message = "Capa 3 (Nombre BD): (Err: $codigo_error) $mensaje_error_nativo";
-                        break;
-
-                    // CAPA 4: Permisos
-                    case 1044: // Access denied for user to database
-                        $user_message = "❌ Error de Permisos: El usuario no tiene permisos en la base de datos. Verifica:\n" .
-                                      "1. Que el usuario esté asignado a esta base de datos en DreamHost\n" .
-                                      "2. Que el usuario tenga permisos suficientes (SELECT, INSERT, UPDATE, DELETE, CREATE)";
-                        $debug_message = "Capa 4 (Permisos BD): (Err: $codigo_error) $mensaje_error_nativo";
-                        break;
-
-                    // CAPA 5: Timeout / Sobrecarga
-                    case 2013: // Lost connection to MySQL server
-                        $user_message = "❌ Error de Timeout: Se perdió la conexión con el servidor. Posibles causas:\n" .
-                                      "1. El servidor está sobrecargado\n" .
-                                      "2. Timeout de conexión muy corto\n" .
-                                      "3. Problemas de red intermitentes";
-                        $debug_message = "Capa 5 (Timeout/Sobrecarga): (Err: $codigo_error) $mensaje_error_nativo";
-                        break;
-
-                    // CAPA X: Otros errores no categorizados
-                    default:
-                        $user_message = "❌ Error de MySQL inesperado. Revisa el mensaje de debug técnico o contacta a soporte de DreamHost.";
-                        $debug_message = "Capa Desconocida (Default): (Err: $codigo_error) $mensaje_error_nativo";
-                }
-
-                return array(
-                    'success' => false,
-                    'user_message' => $user_message,
-                    'debug_message' => $debug_message
-                );
-            }
-
-            // Conexión exitosa - Configurar charset
-            $conn->set_charset('utf8mb4');
-
-            // CAPA 6: Verificación de tabla
+            // Verificar tabla
             $table = $this->settings['db_table'];
-            $query = "CREATE TABLE IF NOT EXISTS `{$table}` (
-                id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                email VARCHAR(255) NOT NULL UNIQUE,
-                subscribed_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                ip_address VARCHAR(45),
-                status VARCHAR(20) DEFAULT 'active',
-                updated_date DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-                source VARCHAR(100) NULL,
-                website_url VARCHAR(255) NULL COMMENT 'URL del sitio WordPress (para múltiples sitios)',
-                notes TEXT NULL,
-                INDEX idx_email (email),
-                INDEX idx_status (status),
-                INDEX idx_subscribed_date (subscribed_date),
-                INDEX idx_status_date (status, subscribed_date),
-                INDEX idx_website_url (website_url(100))
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+            $check_table = $conn->query("SELECT to_regclass('{$table}')");
+            $table_exists = $check_table->fetchColumn() !== null;
 
-            if ($conn->query($query)) {
-                $conn->close();
-                return array(
-                    'success' => true,
-                    'user_message' => '✅ Conexión exitosa y tabla verificada correctamente',
-                    'debug_message' => "Capa 6 (Verificación Tabla): Conexión OK - Tabla '{$table}' verificada/creada"
-                );
-            } else {
-                $error_tabla = $conn->error;
-                $conn->close();
-                return array(
-                    'success' => false,
-                    'user_message' => "❌ Conexión exitosa pero error al crear/verificar tabla. Puede que el usuario no tenga privilegios CREATE TABLE.",
-                    'debug_message' => "Capa 6 (Verificación Tabla): Error al crear tabla: $error_tabla"
-                );
+            if (!$table_exists) {
+                // Crear tabla si no existe
+                $this->connection = $conn;
+                if ($this->create_table_if_not_exists()) {
+                    return array(
+                        'success' => true,
+                        'user_message' => '✅ Conexión exitosa y tabla creada correctamente',
+                        'debug_message' => "Capa 6 (Verificación Tabla): Conexión OK - Tabla '{$table}' creada"
+                    );
+                } else {
+                    return array(
+                        'success' => false,
+                        'user_message' => "❌ Conexión exitosa pero error al crear tabla. Verifica que el usuario tenga privilegios CREATE TABLE.",
+                        'debug_message' => "Capa 6 (Verificación Tabla): Error al crear tabla"
+                    );
+                }
             }
 
-        } catch (Exception $e) {
+            return array(
+                'success' => true,
+                'user_message' => '✅ Conexión exitosa y tabla verificada correctamente',
+                'debug_message' => "Capa 6 (Verificación Tabla): Conexión OK - Tabla '{$table}' existe"
+            );
+
+        } catch (PDOException $e) {
+            $error_code = $e->getCode();
+            $error_message = $e->getMessage();
+
+            $user_message = '';
+            $debug_message = '';
+
+            // Análisis por capas de error PostgreSQL
+            if (strpos($error_message, 'could not translate host name') !== false ||
+                strpos($error_message, 'could not connect to server') !== false) {
+                // CAPA 1: Red / DNS
+                $user_message = "❌ Error de Red/Host: No se pudo contactar al servidor PostgreSQL. Verifica:\n" .
+                              "1. Que el 'Host' sea correcto\n" .
+                              "2. Que tu IP esté autorizada en el servidor PostgreSQL (pg_hba.conf)\n" .
+                              "3. Que el servidor PostgreSQL esté activo\n" .
+                              "4. Que el puerto {$this->settings['db_port']} esté abierto";
+                $debug_message = "Capa 1 (Red/DNS): $error_message";
+
+            } elseif (strpos($error_message, 'password authentication failed') !== false ||
+                      $error_code === '28P01') {
+                // CAPA 2: Autenticación
+                $user_message = "❌ Error de Autenticación: Usuario o contraseña incorrectos. Verifica:\n" .
+                              "1. Que el 'Usuario' sea exacto (sensible a mayúsculas)\n" .
+                              "2. Que la 'Contraseña' sea correcta\n" .
+                              "3. Que el usuario tenga permisos en PostgreSQL";
+                $debug_message = "Capa 2 (Autenticación): $error_message";
+
+            } elseif (strpos($error_message, 'database') !== false && strpos($error_message, 'does not exist') !== false) {
+                // CAPA 3: Nombre de Base de Datos
+                $user_message = "❌ Error de Base de Datos: La base de datos no existe. Verifica:\n" .
+                              "1. Que el 'Nombre de Base de Datos' sea exacto\n" .
+                              "2. Que la base de datos exista en PostgreSQL\n" .
+                              "3. Que el usuario tenga acceso a esta base de datos";
+                $debug_message = "Capa 3 (Nombre BD): $error_message";
+
+            } elseif (strpos($error_message, 'permission denied') !== false) {
+                // CAPA 4: Permisos
+                $user_message = "❌ Error de Permisos: El usuario no tiene permisos en la base de datos. Verifica:\n" .
+                              "1. Que el usuario tenga permisos CONNECT en la base de datos\n" .
+                              "2. Que el usuario tenga permisos suficientes (SELECT, INSERT, UPDATE, DELETE, CREATE)";
+                $debug_message = "Capa 4 (Permisos BD): $error_message";
+
+            } else {
+                // CAPA X: Otros errores
+                $user_message = "❌ Error de PostgreSQL inesperado. Revisa el mensaje de debug técnico.";
+                $debug_message = "Capa Desconocida: (Code: $error_code) $error_message";
+            }
+
             return array(
                 'success' => false,
-                'user_message' => '❌ Excepción de PHP al intentar conectar. Revisa los logs del servidor.',
-                'debug_message' => 'Capa Excepción (PHP): ' . $e->getMessage()
+                'user_message' => $user_message,
+                'debug_message' => $debug_message
             );
         }
     }
@@ -313,49 +344,63 @@ class WP_Subscribers_Database {
             return array('success' => false, 'data' => array());
         }
 
-        $table = $this->settings['db_table'];
-        $where_clauses = array();
+        try {
+            $table = $this->settings['db_table'];
+            $where_clauses = array();
+            $params = array();
 
-        // Filtro por sitio web
-        if ($filter === 'current_site' && $website_url) {
-            $website_url_escaped = $connection->real_escape_string($website_url);
-            $where_clauses[] = "website_url = '{$website_url_escaped}'";
-        }
+            // Filtro por sitio web
+            if ($filter === 'current_site' && $website_url) {
+                $where_clauses[] = "website_url = :website_url";
+                $params[':website_url'] = $website_url;
+            }
 
-        // Construir WHERE
-        $where_sql = '';
-        if (!empty($where_clauses)) {
-            $where_sql = 'WHERE ' . implode(' AND ', $where_clauses);
-        }
+            // Construir WHERE
+            $where_sql = '';
+            if (!empty($where_clauses)) {
+                $where_sql = 'WHERE ' . implode(' AND ', $where_clauses);
+            }
 
-        // Query con paginación
-        $query = "SELECT id, name, email, subscribed_date, ip_address, status, website_url, source, notes, updated_date
-                  FROM `{$table}`
-                  {$where_sql}
-                  ORDER BY subscribed_date DESC
-                  LIMIT {$limit} OFFSET {$offset}";
+            // Query con paginación
+            $query = "SELECT id, name, email, subscribed_date, ip_address, status, website_url, source, notes, updated_date
+                      FROM {$table}
+                      {$where_sql}
+                      ORDER BY subscribed_date DESC
+                      LIMIT :limit OFFSET :offset";
 
-        $result = $connection->query($query);
+            $stmt = $connection->prepare($query);
 
-        if (!$result) {
+            // Bind parámetros
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+            $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+            $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+
+            $stmt->execute();
+            $subscribers = $stmt->fetchAll();
+
+            // Contar total
+            $count_query = "SELECT COUNT(*) as total FROM {$table} {$where_sql}";
+            $count_stmt = $connection->prepare($count_query);
+
+            foreach ($params as $key => $value) {
+                $count_stmt->bindValue($key, $value);
+            }
+
+            $count_stmt->execute();
+            $total = $count_stmt->fetchColumn();
+
+            return array(
+                'success' => true,
+                'data' => $subscribers,
+                'total' => $total
+            );
+
+        } catch (PDOException $e) {
+            error_log('WP Subscribers Get Subscribers Error: ' . $e->getMessage());
             return array('success' => false, 'data' => array());
         }
-
-        $subscribers = array();
-        while ($row = $result->fetch_assoc()) {
-            $subscribers[] = $row;
-        }
-
-        // Contar total
-        $count_query = "SELECT COUNT(*) as total FROM `{$table}` {$where_sql}";
-        $count_result = $connection->query($count_query);
-        $total = $count_result ? $count_result->fetch_assoc()['total'] : 0;
-
-        return array(
-            'success' => true,
-            'data' => $subscribers,
-            'total' => $total
-        );
     }
 
     /**
@@ -368,29 +413,36 @@ class WP_Subscribers_Database {
             return array();
         }
 
-        $table = $this->settings['db_table'];
-        $where = '';
+        try {
+            $table = $this->settings['db_table'];
+            $where = '';
+            $params = array();
 
-        if ($website_url) {
-            $website_url_escaped = $connection->real_escape_string($website_url);
-            $where = "WHERE website_url = '{$website_url_escaped}'";
+            if ($website_url) {
+                $where = "WHERE website_url = :website_url";
+                $params[':website_url'] = $website_url;
+            }
+
+            $query = "SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+                        SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive,
+                        SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as unsubscribed,
+                        SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as bounced
+                      FROM {$table} {$where}";
+
+            $stmt = $connection->prepare($query);
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+
+            $stmt->execute();
+            return $stmt->fetch();
+
+        } catch (PDOException $e) {
+            error_log('WP Subscribers Get Statistics Error: ' . $e->getMessage());
+            return array();
         }
-
-        $query = "SELECT
-                    COUNT(*) as total,
-                    SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
-                    SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive,
-                    SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as unsubscribed,
-                    SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as bounced
-                  FROM `{$table}` {$where}";
-
-        $result = $connection->query($query);
-
-        if ($result) {
-            return $result->fetch_assoc();
-        }
-
-        return array();
     }
 
     /**
@@ -403,26 +455,42 @@ class WP_Subscribers_Database {
             return array('success' => false, 'message' => 'Error de conexión');
         }
 
-        $email = $connection->real_escape_string(sanitize_email($email));
-        $new_status = $connection->real_escape_string(sanitize_text_field($new_status));
-        $notes = $connection->real_escape_string(sanitize_textarea_field($notes));
+        try {
+            $table = $this->settings['db_table'];
 
-        $table = $this->settings['db_table'];
+            // Preparar actualización de notas
+            if (!empty($notes)) {
+                $timestamp = current_time('mysql');
+                $note_entry = "\n[{$timestamp}] Status cambiado a {$new_status}: {$notes}";
 
-        // Preparar actualización de notas
-        $notes_update = '';
-        if (!empty($notes)) {
-            $notes_update = ", notes = CONCAT(COALESCE(notes, ''), '\n[" . current_time('mysql') . "] Status cambiado a {$new_status}: {$notes}')";
-        }
+                $query = "UPDATE {$table}
+                          SET status = :status,
+                              notes = COALESCE(notes, '') || :note
+                          WHERE email = :email";
 
-        $query = "UPDATE `{$table}`
-                  SET status = '{$new_status}'{$notes_update}
-                  WHERE email = '{$email}'";
+                $stmt = $connection->prepare($query);
+                $stmt->execute(array(
+                    ':status' => sanitize_text_field($new_status),
+                    ':note' => sanitize_textarea_field($note_entry),
+                    ':email' => sanitize_email($email)
+                ));
+            } else {
+                $query = "UPDATE {$table}
+                          SET status = :status
+                          WHERE email = :email";
 
-        if ($connection->query($query)) {
+                $stmt = $connection->prepare($query);
+                $stmt->execute(array(
+                    ':status' => sanitize_text_field($new_status),
+                    ':email' => sanitize_email($email)
+                ));
+            }
+
             return array('success' => true, 'message' => 'Estado actualizado correctamente');
-        } else {
-            return array('success' => false, 'message' => 'Error al actualizar: ' . $connection->error);
+
+        } catch (PDOException $e) {
+            error_log('WP Subscribers Update Status Error: ' . $e->getMessage());
+            return array('success' => false, 'message' => 'Error al actualizar: ' . $e->getMessage());
         }
     }
 
@@ -436,30 +504,38 @@ class WP_Subscribers_Database {
             return array('success' => false, 'message' => 'Error de conexión');
         }
 
-        $email = $connection->real_escape_string(sanitize_email($email));
-        $reason = $connection->real_escape_string(sanitize_textarea_field($reason));
-        $table = $this->settings['db_table'];
+        try {
+            $table = $this->settings['db_table'];
+            $timestamp = current_time('mysql');
 
-        // Preparar nota de desuscripción
-        $unsubscribe_note = "[" . current_time('mysql') . "] Desuscrito de toda la red";
-        if (!empty($reason)) {
-            $unsubscribe_note .= " - Razón: {$reason}";
-        }
+            // Preparar nota de desuscripción
+            $unsubscribe_note = "[{$timestamp}] Desuscrito de toda la red";
+            if (!empty($reason)) {
+                $unsubscribe_note .= " - Razón: {$reason}";
+            }
 
-        $query = "UPDATE `{$table}`
-                  SET status = 'unsubscribed',
-                      notes = CONCAT(COALESCE(notes, ''), '\n{$unsubscribe_note}')
-                  WHERE email = '{$email}'";
+            $query = "UPDATE {$table}
+                      SET status = 'unsubscribed',
+                          notes = COALESCE(notes, '') || :note
+                      WHERE email = :email";
 
-        if ($connection->query($query)) {
-            $affected = $connection->affected_rows;
+            $stmt = $connection->prepare($query);
+            $stmt->execute(array(
+                ':note' => sanitize_textarea_field("\n" . $unsubscribe_note),
+                ':email' => sanitize_email($email)
+            ));
+
+            $affected = $stmt->rowCount();
+
             return array(
                 'success' => true,
                 'message' => 'Desuscrito exitosamente de todos los sitios',
                 'affected_rows' => $affected
             );
-        } else {
-            return array('success' => false, 'message' => 'Error al desuscribir: ' . $connection->error);
+
+        } catch (PDOException $e) {
+            error_log('WP Subscribers Unsubscribe Error: ' . $e->getMessage());
+            return array('success' => false, 'message' => 'Error al desuscribir: ' . $e->getMessage());
         }
     }
 
@@ -473,27 +549,27 @@ class WP_Subscribers_Database {
             return null;
         }
 
-        $email = $connection->real_escape_string(sanitize_email($email));
-        $table = $this->settings['db_table'];
+        try {
+            $table = $this->settings['db_table'];
+            $query = "SELECT * FROM {$table} WHERE email = :email LIMIT 1";
 
-        $query = "SELECT * FROM `{$table}` WHERE email = '{$email}' LIMIT 1";
-        $result = $connection->query($query);
+            $stmt = $connection->prepare($query);
+            $stmt->execute(array(':email' => sanitize_email($email)));
 
-        if ($result && $result->num_rows > 0) {
-            return $result->fetch_assoc();
+            $result = $stmt->fetch();
+            return $result ? $result : null;
+
+        } catch (PDOException $e) {
+            error_log('WP Subscribers Get Subscriber Error: ' . $e->getMessage());
+            return null;
         }
-
-        return null;
     }
 
     /**
      * Cerrar conexión
      */
     public function close_connection() {
-        if ($this->connection !== null) {
-            $this->connection->close();
-            $this->connection = null;
-        }
+        $this->connection = null;
     }
 
     /**
