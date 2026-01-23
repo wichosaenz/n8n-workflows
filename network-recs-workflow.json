@@ -1,0 +1,121 @@
+{
+  "name": "Subworkflow: Enviar Artículos de Red a WordPress",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e0d7c4d0-a7e8-4f51-92b1-8d3f8a1c5e6f",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer y parsear los artículos hermanos del XML en el campo prompt\nconst items = [];\n\nfor (const item of $input.all()) {\n  try {\n    const prompt = item.json.prompt || '';\n    const tareaAgente = item.json.tareaAgente || {};\n    \n    // Extraer la sección <articulos_hermanos>...</articulos_hermanos>\n    const articulosMatch = prompt.match(/<articulos_hermanos>([\\s\\S]*?)<\\/articulos_hermanos>/i);\n    \n    if (!articulosMatch) {\n      console.log('No se encontró la sección articulos_hermanos');\n      items.push({\n        json: {\n          articulos: [],\n          tareaAgente: tareaAgente,\n          error: 'No se encontró la sección articulos_hermanos'\n        }\n      });\n      continue;\n    }\n    \n    const articulosXML = articulosMatch[1];\n    \n    // Extraer cada artículo individual usando regex\n    const articuloRegex = /<articulo_hermano>([\\s\\S]*?)<\\/articulo_hermano>/gi;\n    const articulos = [];\n    \n    let match;\n    while ((match = articuloRegex.exec(articulosXML)) !== null) {\n      const articuloXML = match[1];\n      \n      // Función helper para extraer contenido de una etiqueta\n      const extractTag = (xml, tagName) => {\n        const regex = new RegExp(`<${tagName}>([\\\\s\\\\S]*?)<\\\\/${tagName}>`, 'i');\n        const match = xml.match(regex);\n        return match ? match[1].trim() : '';\n      };\n      \n      // Extraer cada campo del artículo\n      const articulo = {\n        titulo: extractTag(articuloXML, 'titulo'),\n        url: extractTag(articuloXML, 'url'),\n        nombre_sitio: extractTag(articuloXML, 'nombre_sitio'),\n        cita_directa: extractTag(articuloXML, 'cita_directa'),\n        dato_clave: extractTag(articuloXML, 'dato_clave')\n      };\n      \n      // Solo agregar si tiene título y URL\n      if (articulo.titulo && articulo.url) {\n        articulos.push(articulo);\n      }\n    }\n    \n    // Preparar el output\n    items.push({\n      json: {\n        articulos: articulos,\n        tareaAgente: tareaAgente,\n        totalArticulos: articulos.length\n      }\n    });\n    \n  } catch (error) {\n    console.error('Error procesando item:', error);\n    items.push({\n      json: {\n        articulos: [],\n        tareaAgente: item.json.tareaAgente || {},\n        error: error.message\n      }\n    });\n  }\n}\n\nreturn items;"
+      },
+      "id": "f1e8d5b1-b8f9-4c62-a3c2-9d4e9b2d6f7g",
+      "name": "Extraer Artículos del XML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar la petición HTTP con autenticación Basic\nconst items = [];\n\nfor (const item of $input.all()) {\n  const articulos = item.json.articulos || [];\n  const tareaAgente = item.json.tareaAgente || {};\n  \n  // Limpiar espacios de la contraseña de aplicación\n  const username = tareaAgente.WP_User_API || '';\n  const password = (tareaAgente.WP_App_Password_API || '').replace(/\\s/g, '');\n  \n  // Codificar credenciales en Base64 para Basic Auth\n  const credentials = Buffer.from(`${username}:${password}`).toString('base64');\n  \n  items.push({\n    json: {\n      url: `${tareaAgente.Sitio_WordPress_URL_Destino}wp-json/network-recs/v1/update`,\n      authorization: `Basic ${credentials}`,\n      body: articulos,\n      totalArticulos: articulos.length\n    }\n  });\n}\n\nreturn items;"
+      },
+      "id": "h3g0f7d3-d0h1-6e84-c5e4-1f6g1d4f8h9i",
+      "name": "Preparar Autenticación",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.authorization }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": []
+        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "g2f9e6c2-c9g0-5d73-b4d3-0e5f0c3e7g8h",
+      "name": "Enviar a WordPress",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extraer Artículos del XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Artículos del XML": {
+      "main": [
+        [
+          {
+            "node": "Preparar Autenticación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Autenticación": {
+      "main": [
+        [
+          {
+            "node": "Enviar a WordPress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-23T00:00:00.000Z",
+  "versionId": "1"
+}
